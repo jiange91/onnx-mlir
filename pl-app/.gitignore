@@ -1,1 +1,6 @@
 data/*
+*.ll
+*.mlir
+*.onnx
+*.o
+*.dat
