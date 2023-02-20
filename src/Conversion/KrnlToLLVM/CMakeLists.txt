@@ -37,3 +37,35 @@ add_onnx_mlir_library(OMKrnlToLLVM
   MLIRVectorToLLVM
   onnx
   )
+
+add_onnx_mlir_library(OMKrnlGlobToMemref
+  KrnlGlobal2memref.cpp
+  KrnlFindIndex.cpp
+  KrnlCall.cpp
+  KrnlEntryPoint.cpp
+  KrnlGlobal.cpp
+  KrnlPrintTensor.cpp
+  KrnlPrint.cpp
+  KrnlToLLVMHelper.cpp  
+  KrnlUnaryMath.cpp
+  KrnlVectorTypeCast.cpp 
+  RuntimeAPI.cpp
+
+  LINK_LIBS PUBLIC
+  OMAccelerator
+  OMSupport
+  MLIRAffineToStandard
+  MLIRArithTransforms
+  MLIRFuncDialect
+  MLIRFuncToLLVM
+  MLIRFuncTransforms
+  MLIRMathToLLVM
+  MLIRMathTransforms
+  MLIRMemRefToLLVM
+  MLIRMemRefTransforms
+  MLIRReconcileUnrealizedCasts
+  MLIRSCFToControlFlow
+  MLIRShapeToStandard
+  MLIRVectorToLLVM
+  onnx
+  )

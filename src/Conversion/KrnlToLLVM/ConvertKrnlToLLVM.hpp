@@ -102,5 +102,8 @@ void genSignatureFunction(mlir::ModuleOp &module,
     const llvm::SmallVectorImpl<mlir::LLVM::GlobalOp> &entryGlobalOps,
     const llvm::SmallVectorImpl<mlir::LLVM::GlobalOp> &inSigGlobalOps,
     const llvm::SmallVectorImpl<mlir::LLVM::GlobalOp> &outSigGlobalOps);
+
+void populateKrnlGlobalToMemrefGlobal(mlir::LLVMTypeConverter &typeConverter,
+    mlir::RewritePatternSet &patterns, mlir::MLIRContext *ctx);
 } // namespace krnl
 } // namespace onnx_mlir

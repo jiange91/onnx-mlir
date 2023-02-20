@@ -1,0 +1,17 @@
+module attributes {llvm.data_layout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128", llvm.target_triple = "x86_64-unknown-linux-gnu"} {
+  func.func @main_graph(%arg0: tensor<1x1x28x28xf32>) -> tensor<1x10xf32> attributes {input_names = ["image"], output_names = ["prediction"]} {
+    %0 = onnx.Constant dense_resource<__elided__> : tensor<128x196xf32>
+    %1 = onnx.Constant dense_resource<__elided__> : tensor<128xf32>
+    %2 = onnx.Constant dense_resource<__elided__> : tensor<10x128xf32>
+    %3 = onnx.Constant dense<[0.0360819325, 0.0303174332, -0.014957685, 0.0604293533, 0.0917338133, 0.0978015586, -0.0705472528, 0.121654645, -0.039008636, -0.0469057448]> : tensor<10xf32>
+    %4 = "onnx.MaxPoolSingleOut"(%arg0) {auto_pad = "NOTSET", ceil_mode = 0 : si64, kernel_shape = [2, 2], onnx_node_name = "MaxPool_0", pads = [0, 0, 0, 0], storage_order = 0 : si64, strides = [2, 2]} : (tensor<1x1x28x28xf32>) -> tensor<1x1x14x14xf32>
+    %5 = onnx.Constant dense<[-1, 196]> : tensor<2xi64>
+    %6 = "onnx.Reshape"(%4, %5) {allowzero = 0 : si64, onnx_node_name = "Reshape_2"} : (tensor<1x1x14x14xf32>, tensor<2xi64>) -> tensor<1x196xf32>
+    %7 = "onnx.Gemm"(%6, %0, %1) {alpha = 1.000000e+00 : f32, beta = 1.000000e+00 : f32, onnx_node_name = "Gemm_3", transA = 0 : si64, transB = 1 : si64} : (tensor<1x196xf32>, tensor<128x196xf32>, tensor<128xf32>) -> tensor<1x128xf32>
+    %8 = "onnx.Relu"(%7) {onnx_node_name = "Relu_4"} : (tensor<1x128xf32>) -> tensor<1x128xf32>
+    %9 = "onnx.Gemm"(%8, %2, %3) {alpha = 1.000000e+00 : f32, beta = 1.000000e+00 : f32, onnx_node_name = "Gemm_5", transA = 0 : si64, transB = 1 : si64} : (tensor<1x128xf32>, tensor<10x128xf32>, tensor<10xf32>) -> tensor<1x10xf32>
+    %10 = "onnx.Softmax"(%9) {axis = 1 : si64, onnx_node_name = "Softmax_6"} : (tensor<1x10xf32>) -> tensor<1x10xf32>
+    return %10 : tensor<1x10xf32>
+  }
+  "onnx.EntryPoint"() {func = @main_graph} : () -> ()
+}

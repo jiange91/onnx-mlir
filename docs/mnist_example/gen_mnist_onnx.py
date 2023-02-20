@@ -186,7 +186,7 @@ def main():
         torch.onnx.export(model,
                           dummy_input,
                           "mnist.onnx",
-                          verbose=True,
+                          verbose=False,
                           input_names=input_names,
                           output_names=output_names)
 
