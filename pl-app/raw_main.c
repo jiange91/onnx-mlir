@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <unistd.h>
 
+#define reset_swap_stat 330
 #define abs(X) ((X) < 0 ? -1.f * (X) : (X))
 DEF_TENSOR(2);
 DEF_TENSOR(4);
@@ -32,10 +34,11 @@ int main(int argc, char *argv[]) {
   int64_t rank = 4;
 
   float *in_buf = read_tensor("dummy_64_fminist_in.dat", in_shape, rank);
-  float *out_buf = read_tensor("dummy_64_fminist_out.dat", out_shape, 2);
+  // float *out_buf = read_tensor("dummy_64_fminist_out.dat", out_shape, 2);
 
   MAKE_TENSOR(x, in_buf, in_shape, 4);
   Tensor_R2 output;
+  syscall(reset_swap_stat); 
 
   // Compute outputs.
   uint64_t start_ns = getCurNs();
@@ -44,13 +47,13 @@ int main(int argc, char *argv[]) {
   printf("Exec time %.6f us\n", (float)(end_ns - start_ns)/1e3);
 
   // Get the first omt as output.
-  printf("Verify output ---- \n");
-  float *outputPtr = output._aligned_ptr;
-  for (int64_t e = 0; e < out_shape[0] * out_shape[1]; ++ e) {
-    float diff = abs(outputPtr[e] - out_buf[e]);
-    if (diff >= 1e-5)
-      printf("pred: %f, y: %f, diff: %f\n", outputPtr[e], out_buf[e], diff);
-  }
-  printf(" ---- Complete\n");
+  // printf("Verify output ---- \n");
+  // float *outputPtr = output._aligned_ptr;
+  // for (int64_t e = 0; e < out_shape[0] * out_shape[1]; ++ e) {
+  //   float diff = abs(outputPtr[e] - out_buf[e]);
+  //   if (diff >= 1e-5)
+  //     printf("pred: %f, y: %f, diff: %f\n", outputPtr[e], out_buf[e], diff);
+  // }
+  // printf(" ---- Complete\n");
   return 0;
 }

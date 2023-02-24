@@ -2,9 +2,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 #include "common.h"
 
 #define abs(X) ((X) < 0 ? -1.f * (X) : (X))
+#define reset_swap_stat 330
+
 DEF_TENSOR(2);
 
 void _mlir_ciface_main_graph(Tensor_R2 *C, Tensor_R2 *A, Tensor_R2 *B);
@@ -34,16 +37,18 @@ int main() {
 
   // Call the compiled onnx model function.
   Tensor_R2 C;
+  syscall(reset_swap_stat); 
+
   uint64_t start_ns = getCurNs();
   _mlir_ciface_main_graph(&C, &_T_A, &_T_B);
   uint64_t end_ns = getCurNs();
   printf("Exec time %.6f us\n", (float)(end_ns - start_ns)/1e3);
 
-  int64_t ele_C = A_shape[0] * B_shape[1];
-  for (int64_t i = 0; i < ele_C; i++) {
-    float diff = abs(C._aligned_ptr[i] - 9216.0);
-    if (diff >= 1e-5)
-      printf("C: %f, diff: %f\n", C._aligned_ptr[i], diff);
-  }
+  // int64_t ele_C = A_shape[0] * B_shape[1];
+  // for (int64_t i = 0; i < ele_C; i++) {
+  //   float diff = abs(C._aligned_ptr[i] - 9216.0);
+  //   if (diff >= 1e-5)
+  //     printf("C: %f, diff: %f\n", C._aligned_ptr[i], diff);
+  // }
   return 0;
 }

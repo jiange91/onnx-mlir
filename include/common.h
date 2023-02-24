@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <time.h>
+#include <stdlib.h>
 
 static inline uint64_t getCurNs() {
   struct timespec ts;
@@ -31,3 +32,15 @@ typedef struct { \
         _T_##t.strides[i] = shape[i+1] * _T_##t.strides[i+1];  \
     } \
   } while (0)
+
+float *dummy_tensor(int64_t shape[], int rank) {
+  size_t num_ele = 1;
+  for (int i = 0; i < rank; ++ i)
+    num_ele *= shape[i];
+
+  float *dat_buf = (float *) aligned_alloc(4096, sizeof(float) * num_ele);
+  for (int64_t e = 0; e < num_ele; ++ e) {
+    dat_buf[e] = 1.0f;
+  }
+  return dat_buf;
+}
