@@ -1,6 +1,13 @@
+#ifdef __cpluscplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <time.h>
 #include <stdlib.h>
+#include <stdio.h>
+
+#define abs(X) ((X) < 0 ? -1 * (X) : (X))
 
 static inline uint64_t getCurNs() {
   struct timespec ts;
@@ -44,3 +51,37 @@ float *dummy_tensor(int64_t shape[], int rank) {
   }
   return dat_buf;
 }
+
+float *read_tensor(const char* file, int64_t shape[], int rank) {
+  size_t num_ele = 1;
+  for (int i = 0; i < rank; ++ i)
+    num_ele *= shape[i];
+
+  float *dat_buf = (float *) aligned_alloc(4096, sizeof(float) * num_ele);
+
+  FILE *datfile = fopen(file, "r");
+  size_t read = fread(dat_buf, sizeof(float), num_ele, datfile);
+  if (read < num_ele)
+    printf("Error reading input np array from %s\n", file);
+
+  fclose(datfile);
+  return dat_buf;
+}
+
+
+void check_output(float *pred, float *truth, int64_t shape[], int rank) {
+  size_t num_ele = 1;
+  for (int i = 0; i < rank; ++ i)
+    num_ele *= shape[i];
+  printf("Verify output ---- \n");
+  for (int64_t e = 0; e < num_ele; ++ e) {
+    float diff = abs(pred[e] - truth[e]);
+    if (diff >= 1e-5)
+      printf("pred: %f, truth: %f, diff: %f\n", pred[e], truth[e], diff);
+  }
+  printf(" ---- Complete\n");
+}
+
+#ifdef __cpluscplus
+}
+#endif

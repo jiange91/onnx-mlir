@@ -18,6 +18,8 @@
 #include "src/Dialect/Krnl/KrnlOps.hpp"
 #include "src/Conversion/KrnlToLLVM/KrnlToLLVMHelper.hpp"
 #include "src/Dialect/Mlir/DialectBuilder.hpp"
+#include "src/Dialect/Krnl/KrnlHelper.hpp"
+#include "src/Dialect/Krnl/KrnlOps.hpp"
 #include "src/Support/KrnlSupport.hpp"
 #include "src/Pass/Passes.hpp"
 #include "mlir/Pass/Pass.h"
@@ -229,7 +231,11 @@ void KrnlGlobToMemrefPass::runOnOperation() {
   const auto &dataLayoutAnalysis = getAnalysis<DataLayoutAnalysis>();
   LowerToLLVMOptions options(ctx, dataLayoutAnalysis.getAtOrAbove(module));
 
-  
+  // Delete entry point
+  OpBuilder b(module);
+  module->walk([&](KrnlEntryPointOp op) {
+    op.erase();
+  });
 
   // Define the target for this lowering i.e. the LLVM dialect.
   ConversionTarget target(*ctx);

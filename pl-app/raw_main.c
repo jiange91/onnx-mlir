@@ -5,7 +5,6 @@
 #include <unistd.h>
 
 #define reset_swap_stat 330
-#define abs(X) ((X) < 0 ? -1.f * (X) : (X))
 DEF_TENSOR(2);
 DEF_TENSOR(4);
 
