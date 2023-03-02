@@ -44,7 +44,8 @@ float *dummy_tensor(int64_t shape[], int rank) {
   size_t num_ele = 1;
   for (int i = 0; i < rank; ++ i)
     num_ele *= shape[i];
-
+  if (num_ele <= 0)
+    return NULL;
   float *dat_buf = (float *) aligned_alloc(4096, sizeof(float) * num_ele);
   for (int64_t e = 0; e < num_ele; ++ e) {
     dat_buf[e] = 1.0f;
@@ -81,6 +82,26 @@ void check_output(float *pred, float *truth, int64_t shape[], int rank) {
   }
   printf(" ---- Complete\n");
 }
+
+#define FMB (256L << 10)
+float volatile flush_dummy = 1;
+
+void flush_local(int64_t msize) {
+  if (msize <= 0) {
+    printf("no flush\n");
+    return;
+  }
+  int64_t shape[3] = { 256, 1024, msize };
+  float *buf = dummy_tensor(shape, 3);
+  size_t num_ele = 1;
+  for (int i = 0; i < 3; ++ i)
+    num_ele *= shape[i];
+  for (size_t e = 0; e < num_ele; ++ e) {
+    flush_dummy += buf[e];
+  }
+  printf("flush dummy IO %f\n", flush_dummy);
+}
+
 
 #ifdef __cpluscplus
 }

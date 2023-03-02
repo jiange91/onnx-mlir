@@ -8,14 +8,12 @@
 extern "C" OMTensorList *run_main_graph(OMTensorList *);
 
 int main(int argc, char **argv) {
-  // Create an input tensor list of 1 tensor.
   int inputNum = 1;
   OMTensor **inputTensors = (OMTensor **)malloc(inputNum * sizeof(OMTensor *));
-  // The first input is of tensor<1x1x28x28xf32>.
-  int64_t rank = 3;
-  int64_t shape[] = {1008, 64, 512};
-  float *input = read_tensor("dummy_in.dat", shape, 3);
-  // float *output = read_tensor("dummy_out.dat", shape, 3);
+
+  int64_t rank = 2;
+  int64_t shape[] = {64, 20};
+  float *input = read_tensor("dummy_in.dat", shape, rank);
   int64_t flush_size = atol(argv[1]);
 
   OMTensor *tensor = omTensorCreate(input, shape, rank, ONNX_TYPE_FLOAT);
@@ -34,7 +32,13 @@ int main(int argc, char **argv) {
 
   // Extract the output. The model defines one output of type tensor<1x10xf32>.
   OMTensor *y = omTensorListGetOmtByIndex(tensorListOut, 0);
-  float *prediction = (float *)omTensorGetDataPtr(y);
+  int64_t outrank = omTensorGetRank(y);
+  int64_t *outshapes = omTensorGetShape(y);
+  for (int64_t i = 0; i < outrank; ++i ) {
+    printf("%l\n", outshapes[i]);
+  }
+  
+ // float *prediction = (float *)omTensorGetDataPtr(y);
 
   // Analyze the output.
  //  check_output(prediction, output, shape, rank);

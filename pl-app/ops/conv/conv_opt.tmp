@@ -1,0 +1,285 @@
+#map = affine_map<(d0) -> (d0 + 1)>
+#map1 = affine_map<(d0) -> (d0 + 2)>
+#map2 = affine_map<(d0) -> (d0 + 3)>
+#set = affine_set<() : (1 >= 0, 1 >= 0, 1 >= 0)>
+module attributes {llvm.data_layout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128", llvm.target_triple = "x86_64-unknown-linux-gnu"} {
+  func.func @main_graph(%arg0: memref<128x64x224x224xf32>) -> memref<128x64x224x224xf32> attributes {input_names = ["image"], llvm.emit_c_interface, output_names = ["prediction"]} {
+    %c0 = arith.constant 0 : index
+    %cst = arith.constant 0.000000e+00 : f32
+    %c50176 = arith.constant 50176 : index
+    %c0_0 = arith.constant 0 : index
+    %c64 = arith.constant 64 : index
+    %c128 = arith.constant 128 : index
+    %reinterpret_cast = memref.reinterpret_cast %arg0 to offset: [0], sizes: [128, 64, 50176], strides: [3211264, 50176, 1] : memref<128x64x224x224xf32> to memref<128x64x50176xf32>
+    %0 = "krnl.global"() {name = "constant_1", shape = [64, 64], value = dense_resource<__elided__> : tensor<64x64xf32>} : () -> memref<64x64xf32>
+    %alloc = memref.alloc() {alignment = 16 : i64} : memref<128x64x50176xf32>
+    %c128_1 = arith.constant 128 : index
+    %c64_2 = arith.constant 64 : index
+    %c50176_3 = arith.constant 50176 : index
+    %c0_4 = arith.constant 0 : index
+    affine.for %arg1 = 0 to 128 {
+      affine.for %arg2 = 0 to 64 {
+        affine.for %arg3 = 0 to 50176 {
+          affine.store %cst, %alloc[%arg1, %arg2, %arg3] : memref<128x64x50176xf32>
+        }
+      }
+    }
+    affine.for %arg1 = %c0_0 to %c128 {
+      affine.for %arg2 = %c0_0 to %c64 step 4 {
+        affine.for %arg3 = %c0_0 to %c50176 step 8 {
+          affine.for %arg4 = %c0_0 to %c64 step 8 {
+            %c64_6 = arith.constant 64 : index
+            %c64_7 = arith.constant 64 : index
+            %c128_8 = arith.constant 128 : index
+            %c64_9 = arith.constant 64 : index
+            %c50176_10 = arith.constant 50176 : index
+            %c128_11 = arith.constant 128 : index
+            %c64_12 = arith.constant 64 : index
+            %c50176_13 = arith.constant 50176 : index
+            %c4 = arith.constant 4 : index
+            %c8 = arith.constant 8 : index
+            %c8_14 = arith.constant 8 : index
+            %c64_15 = arith.constant 64 : index
+            %c50176_16 = arith.constant 50176 : index
+            %c64_17 = arith.constant 64 : index
+            %c1 = arith.constant 1 : index
+            %c0_18 = arith.constant 0 : index
+            %c0_19 = arith.constant 0 : index
+            %c0_20 = arith.constant 0 : index
+            %c0_21 = arith.constant 0 : index
+            %c0_22 = arith.constant 0 : index
+            %c0_23 = arith.constant 0 : index
+            %c1_24 = arith.constant 1 : index
+            %c1_25 = arith.constant 1 : index
+            %c1_26 = arith.constant 1 : index
+            %c0_27 = arith.constant 0 : index
+            affine.if #set() {
+              %alloca = memref.alloca() {alignment = 64 : i64} : memref<4xvector<8xf32>>
+              %c0_28 = arith.constant 0 : index
+              %c0_29 = arith.constant 0 : index
+              %1 = arith.addi %c0, %arg2 : index
+              %2 = arith.addi %c0_29, %arg3 : index
+              %3 = vector.load %alloc[%arg1, %1, %2] : memref<128x64x50176xf32>, vector<8xf32>
+              affine.store %3, %alloca[%c0] : memref<4xvector<8xf32>>
+              %4 = affine.apply #map(%c0)
+              %5 = arith.addi %4, %arg2 : index
+              %6 = arith.addi %c0_29, %arg3 : index
+              %7 = vector.load %alloc[%arg1, %5, %6] : memref<128x64x50176xf32>, vector<8xf32>
+              affine.store %7, %alloca[%4] : memref<4xvector<8xf32>>
+              %8 = affine.apply #map1(%c0)
+              %9 = arith.addi %8, %arg2 : index
+              %10 = arith.addi %c0_29, %arg3 : index
+              %11 = vector.load %alloc[%arg1, %9, %10] : memref<128x64x50176xf32>, vector<8xf32>
+              affine.store %11, %alloca[%8] : memref<4xvector<8xf32>>
+              %12 = affine.apply #map2(%c0)
+              %13 = arith.addi %12, %arg2 : index
+              %14 = arith.addi %c0_29, %arg3 : index
+              %15 = vector.load %alloc[%arg1, %13, %14] : memref<128x64x50176xf32>, vector<8xf32>
+              affine.store %15, %alloca[%12] : memref<4xvector<8xf32>>
+              affine.for %arg5 = 0 to 8 step 4 {
+                %31 = arith.addi %c0, %arg2 : index
+                %32 = arith.addi %arg5, %arg4 : index
+                %33 = memref.load %0[%31, %32] : memref<64x64xf32>
+                %34 = vector.broadcast %33 : f32 to vector<8xf32>
+                %35 = arith.addi %arg5, %arg4 : index
+                %36 = arith.addi %c0_29, %arg3 : index
+                %37 = vector.load %reinterpret_cast[%arg1, %35, %36] : memref<128x64x50176xf32>, vector<8xf32>
+                %38 = affine.load %alloca[%c0] : memref<4xvector<8xf32>>
+                %39 = vector.fma %34, %37, %38 : vector<8xf32>
+                affine.store %39, %alloca[%c0] : memref<4xvector<8xf32>>
+                %40 = affine.apply #map(%arg5)
+                %41 = arith.addi %c0, %arg2 : index
+                %42 = arith.addi %40, %arg4 : index
+                %43 = memref.load %0[%41, %42] : memref<64x64xf32>
+                %44 = vector.broadcast %43 : f32 to vector<8xf32>
+                %45 = arith.addi %40, %arg4 : index
+                %46 = arith.addi %c0_29, %arg3 : index
+                %47 = vector.load %reinterpret_cast[%arg1, %45, %46] : memref<128x64x50176xf32>, vector<8xf32>
+                %48 = affine.load %alloca[%c0] : memref<4xvector<8xf32>>
+                %49 = vector.fma %44, %47, %48 : vector<8xf32>
+                affine.store %49, %alloca[%c0] : memref<4xvector<8xf32>>
+                %50 = affine.apply #map1(%arg5)
+                %51 = arith.addi %c0, %arg2 : index
+                %52 = arith.addi %50, %arg4 : index
+                %53 = memref.load %0[%51, %52] : memref<64x64xf32>
+                %54 = vector.broadcast %53 : f32 to vector<8xf32>
+                %55 = arith.addi %50, %arg4 : index
+                %56 = arith.addi %c0_29, %arg3 : index
+                %57 = vector.load %reinterpret_cast[%arg1, %55, %56] : memref<128x64x50176xf32>, vector<8xf32>
+                %58 = affine.load %alloca[%c0] : memref<4xvector<8xf32>>
+                %59 = vector.fma %54, %57, %58 : vector<8xf32>
+                affine.store %59, %alloca[%c0] : memref<4xvector<8xf32>>
+                %60 = affine.apply #map2(%arg5)
+                %61 = arith.addi %c0, %arg2 : index
+                %62 = arith.addi %60, %arg4 : index
+                %63 = memref.load %0[%61, %62] : memref<64x64xf32>
+                %64 = vector.broadcast %63 : f32 to vector<8xf32>
+                %65 = arith.addi %60, %arg4 : index
+                %66 = arith.addi %c0_29, %arg3 : index
+                %67 = vector.load %reinterpret_cast[%arg1, %65, %66] : memref<128x64x50176xf32>, vector<8xf32>
+                %68 = affine.load %alloca[%c0] : memref<4xvector<8xf32>>
+                %69 = vector.fma %64, %67, %68 : vector<8xf32>
+                affine.store %69, %alloca[%c0] : memref<4xvector<8xf32>>
+                %70 = affine.apply #map(%c0)
+                %71 = arith.addi %70, %arg2 : index
+                %72 = arith.addi %arg5, %arg4 : index
+                %73 = memref.load %0[%71, %72] : memref<64x64xf32>
+                %74 = vector.broadcast %73 : f32 to vector<8xf32>
+                %75 = arith.addi %arg5, %arg4 : index
+                %76 = arith.addi %c0_29, %arg3 : index
+                %77 = vector.load %reinterpret_cast[%arg1, %75, %76] : memref<128x64x50176xf32>, vector<8xf32>
+                %78 = affine.load %alloca[%70] : memref<4xvector<8xf32>>
+                %79 = vector.fma %74, %77, %78 : vector<8xf32>
+                affine.store %79, %alloca[%70] : memref<4xvector<8xf32>>
+                %80 = affine.apply #map(%arg5)
+                %81 = arith.addi %70, %arg2 : index
+                %82 = arith.addi %80, %arg4 : index
+                %83 = memref.load %0[%81, %82] : memref<64x64xf32>
+                %84 = vector.broadcast %83 : f32 to vector<8xf32>
+                %85 = arith.addi %80, %arg4 : index
+                %86 = arith.addi %c0_29, %arg3 : index
+                %87 = vector.load %reinterpret_cast[%arg1, %85, %86] : memref<128x64x50176xf32>, vector<8xf32>
+                %88 = affine.load %alloca[%70] : memref<4xvector<8xf32>>
+                %89 = vector.fma %84, %87, %88 : vector<8xf32>
+                affine.store %89, %alloca[%70] : memref<4xvector<8xf32>>
+                %90 = affine.apply #map1(%arg5)
+                %91 = arith.addi %70, %arg2 : index
+                %92 = arith.addi %90, %arg4 : index
+                %93 = memref.load %0[%91, %92] : memref<64x64xf32>
+                %94 = vector.broadcast %93 : f32 to vector<8xf32>
+                %95 = arith.addi %90, %arg4 : index
+                %96 = arith.addi %c0_29, %arg3 : index
+                %97 = vector.load %reinterpret_cast[%arg1, %95, %96] : memref<128x64x50176xf32>, vector<8xf32>
+                %98 = affine.load %alloca[%70] : memref<4xvector<8xf32>>
+                %99 = vector.fma %94, %97, %98 : vector<8xf32>
+                affine.store %99, %alloca[%70] : memref<4xvector<8xf32>>
+                %100 = affine.apply #map2(%arg5)
+                %101 = arith.addi %70, %arg2 : index
+                %102 = arith.addi %100, %arg4 : index
+                %103 = memref.load %0[%101, %102] : memref<64x64xf32>
+                %104 = vector.broadcast %103 : f32 to vector<8xf32>
+                %105 = arith.addi %100, %arg4 : index
+                %106 = arith.addi %c0_29, %arg3 : index
+                %107 = vector.load %reinterpret_cast[%arg1, %105, %106] : memref<128x64x50176xf32>, vector<8xf32>
+                %108 = affine.load %alloca[%70] : memref<4xvector<8xf32>>
+                %109 = vector.fma %104, %107, %108 : vector<8xf32>
+                affine.store %109, %alloca[%70] : memref<4xvector<8xf32>>
+                %110 = affine.apply #map1(%c0)
+                %111 = arith.addi %110, %arg2 : index
+                %112 = arith.addi %arg5, %arg4 : index
+                %113 = memref.load %0[%111, %112] : memref<64x64xf32>
+                %114 = vector.broadcast %113 : f32 to vector<8xf32>
+                %115 = arith.addi %arg5, %arg4 : index
+                %116 = arith.addi %c0_29, %arg3 : index
+                %117 = vector.load %reinterpret_cast[%arg1, %115, %116] : memref<128x64x50176xf32>, vector<8xf32>
+                %118 = affine.load %alloca[%110] : memref<4xvector<8xf32>>
+                %119 = vector.fma %114, %117, %118 : vector<8xf32>
+                affine.store %119, %alloca[%110] : memref<4xvector<8xf32>>
+                %120 = affine.apply #map(%arg5)
+                %121 = arith.addi %110, %arg2 : index
+                %122 = arith.addi %120, %arg4 : index
+                %123 = memref.load %0[%121, %122] : memref<64x64xf32>
+                %124 = vector.broadcast %123 : f32 to vector<8xf32>
+                %125 = arith.addi %120, %arg4 : index
+                %126 = arith.addi %c0_29, %arg3 : index
+                %127 = vector.load %reinterpret_cast[%arg1, %125, %126] : memref<128x64x50176xf32>, vector<8xf32>
+                %128 = affine.load %alloca[%110] : memref<4xvector<8xf32>>
+                %129 = vector.fma %124, %127, %128 : vector<8xf32>
+                affine.store %129, %alloca[%110] : memref<4xvector<8xf32>>
+                %130 = affine.apply #map1(%arg5)
+                %131 = arith.addi %110, %arg2 : index
+                %132 = arith.addi %130, %arg4 : index
+                %133 = memref.load %0[%131, %132] : memref<64x64xf32>
+                %134 = vector.broadcast %133 : f32 to vector<8xf32>
+                %135 = arith.addi %130, %arg4 : index
+                %136 = arith.addi %c0_29, %arg3 : index
+                %137 = vector.load %reinterpret_cast[%arg1, %135, %136] : memref<128x64x50176xf32>, vector<8xf32>
+                %138 = affine.load %alloca[%110] : memref<4xvector<8xf32>>
+                %139 = vector.fma %134, %137, %138 : vector<8xf32>
+                affine.store %139, %alloca[%110] : memref<4xvector<8xf32>>
+                %140 = affine.apply #map2(%arg5)
+                %141 = arith.addi %110, %arg2 : index
+                %142 = arith.addi %140, %arg4 : index
+                %143 = memref.load %0[%141, %142] : memref<64x64xf32>
+                %144 = vector.broadcast %143 : f32 to vector<8xf32>
+                %145 = arith.addi %140, %arg4 : index
+                %146 = arith.addi %c0_29, %arg3 : index
+                %147 = vector.load %reinterpret_cast[%arg1, %145, %146] : memref<128x64x50176xf32>, vector<8xf32>
+                %148 = affine.load %alloca[%110] : memref<4xvector<8xf32>>
+                %149 = vector.fma %144, %147, %148 : vector<8xf32>
+                affine.store %149, %alloca[%110] : memref<4xvector<8xf32>>
+                %150 = affine.apply #map2(%c0)
+                %151 = arith.addi %150, %arg2 : index
+                %152 = arith.addi %arg5, %arg4 : index
+                %153 = memref.load %0[%151, %152] : memref<64x64xf32>
+                %154 = vector.broadcast %153 : f32 to vector<8xf32>
+                %155 = arith.addi %arg5, %arg4 : index
+                %156 = arith.addi %c0_29, %arg3 : index
+                %157 = vector.load %reinterpret_cast[%arg1, %155, %156] : memref<128x64x50176xf32>, vector<8xf32>
+                %158 = affine.load %alloca[%150] : memref<4xvector<8xf32>>
+                %159 = vector.fma %154, %157, %158 : vector<8xf32>
+                affine.store %159, %alloca[%150] : memref<4xvector<8xf32>>
+                %160 = affine.apply #map(%arg5)
+                %161 = arith.addi %150, %arg2 : index
+                %162 = arith.addi %160, %arg4 : index
+                %163 = memref.load %0[%161, %162] : memref<64x64xf32>
+                %164 = vector.broadcast %163 : f32 to vector<8xf32>
+                %165 = arith.addi %160, %arg4 : index
+                %166 = arith.addi %c0_29, %arg3 : index
+                %167 = vector.load %reinterpret_cast[%arg1, %165, %166] : memref<128x64x50176xf32>, vector<8xf32>
+                %168 = affine.load %alloca[%150] : memref<4xvector<8xf32>>
+                %169 = vector.fma %164, %167, %168 : vector<8xf32>
+                affine.store %169, %alloca[%150] : memref<4xvector<8xf32>>
+                %170 = affine.apply #map1(%arg5)
+                %171 = arith.addi %150, %arg2 : index
+                %172 = arith.addi %170, %arg4 : index
+                %173 = memref.load %0[%171, %172] : memref<64x64xf32>
+                %174 = vector.broadcast %173 : f32 to vector<8xf32>
+                %175 = arith.addi %170, %arg4 : index
+                %176 = arith.addi %c0_29, %arg3 : index
+                %177 = vector.load %reinterpret_cast[%arg1, %175, %176] : memref<128x64x50176xf32>, vector<8xf32>
+                %178 = affine.load %alloca[%150] : memref<4xvector<8xf32>>
+                %179 = vector.fma %174, %177, %178 : vector<8xf32>
+                affine.store %179, %alloca[%150] : memref<4xvector<8xf32>>
+                %180 = affine.apply #map2(%arg5)
+                %181 = arith.addi %150, %arg2 : index
+                %182 = arith.addi %180, %arg4 : index
+                %183 = memref.load %0[%181, %182] : memref<64x64xf32>
+                %184 = vector.broadcast %183 : f32 to vector<8xf32>
+                %185 = arith.addi %180, %arg4 : index
+                %186 = arith.addi %c0_29, %arg3 : index
+                %187 = vector.load %reinterpret_cast[%arg1, %185, %186] : memref<128x64x50176xf32>, vector<8xf32>
+                %188 = affine.load %alloca[%150] : memref<4xvector<8xf32>>
+                %189 = vector.fma %184, %187, %188 : vector<8xf32>
+                affine.store %189, %alloca[%150] : memref<4xvector<8xf32>>
+              }
+              %16 = affine.load %alloca[%c0] : memref<4xvector<8xf32>>
+              %17 = arith.addi %c0, %arg2 : index
+              %18 = arith.addi %c0_29, %arg3 : index
+              vector.store %16, %alloc[%arg1, %17, %18] : memref<128x64x50176xf32>, vector<8xf32>
+              %19 = affine.apply #map(%c0)
+              %20 = affine.load %alloca[%19] : memref<4xvector<8xf32>>
+              %21 = arith.addi %19, %arg2 : index
+              %22 = arith.addi %c0_29, %arg3 : index
+              vector.store %20, %alloc[%arg1, %21, %22] : memref<128x64x50176xf32>, vector<8xf32>
+              %23 = affine.apply #map1(%c0)
+              %24 = affine.load %alloca[%23] : memref<4xvector<8xf32>>
+              %25 = arith.addi %23, %arg2 : index
+              %26 = arith.addi %c0_29, %arg3 : index
+              vector.store %24, %alloc[%arg1, %25, %26] : memref<128x64x50176xf32>, vector<8xf32>
+              %27 = affine.apply #map2(%c0)
+              %28 = affine.load %alloca[%27] : memref<4xvector<8xf32>>
+              %29 = arith.addi %27, %arg2 : index
+              %30 = arith.addi %c0_29, %arg3 : index
+              vector.store %28, %alloc[%arg1, %29, %30] : memref<128x64x50176xf32>, vector<8xf32>
+            } else {
+            }
+          }
+        }
+      }
+    }
+    %reinterpret_cast_5 = memref.reinterpret_cast %alloc to offset: [0], sizes: [128, 64, 224, 224], strides: [3211264, 50176, 224, 1] : memref<128x64x50176xf32> to memref<128x64x224x224xf32>
+    return %reinterpret_cast_5 : memref<128x64x224x224xf32>
+  }
+  "krnl.entry_point"() {func = @main_graph, numInputs = 1 : i32, numOutputs = 1 : i32, signature = "[    { \22type\22 : \22f32\22 , \22dims\22 : [128 , 64 , 224 , 224] , \22name\22 : \22image\22 }\0A\0A]\00@[   { \22type\22 : \22f32\22 , \22dims\22 : [128 , 64 , 224 , 224] , \22name\22 : \22prediction\22 }\0A\0A]\00"} : () -> ()
+}
