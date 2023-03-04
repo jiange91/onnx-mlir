@@ -57,7 +57,7 @@ Value RuntimeAPI::callApi(OpBuilder &builder, Location loc,
 
 RuntimeAPIRegistry::~RuntimeAPIRegistry() {}
 
-RuntimeAPIRegistry::RuntimeAPIRegistry(ModuleOp &module, OpBuilder &builder, bool elider)
+RuntimeAPIRegistry::RuntimeAPIRegistry(ModuleOp &module, OpBuilder &builder)
     : registry() {
   MLIRContext *context = module.getContext();
   auto voidTy = LLVM::LLVMVoidType::get(context);

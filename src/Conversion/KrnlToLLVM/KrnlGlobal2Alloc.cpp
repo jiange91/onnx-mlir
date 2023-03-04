@@ -55,17 +55,17 @@ public:
   };
 
 private:
-  EliderAPI(ID id, StringRef name, Type output, ArrayRef<Type> input) : id(id), name(name), outputTy(output), inputTypes(input.begin(), input.end()) {}
+  EliderAPI(ID id, StringRef name, ArrayRef<Type> output, ArrayRef<Type> input) : id(id), name(name), outputTy(output), inputTypes(input.begin(), input.end()) {}
   ID id;
   StringRef name;
-  mlir::Type outputTy;
+  llvm::SmallVector<Type, 2> outputTy;
   llvm::SmallVector<Type, 2> inputTypes;
 };
 
 class EliderRegistry final {
 public:
 
-  EliderAPI(mlir::ModuleOp &module): module(module) {
+  EliderRegistry(mlir::ModuleOp &module): module(module) {
     MLIRContext *context = module.getContext();
     auto voidTy = LLVM::LLVMVoidType::get(context);
     auto int8Ty = IntegerType::get(context, 8);
@@ -80,15 +80,15 @@ public:
     auto mdbl = UnrankedMemRefType::get(dblTy, 0);
 
     using ID = EliderAPI::ID;
-    registry.emplace(ID::READ_I32, EliderAPI(ID::READ_I32, "read_tensor_i32", voidTy, {  opaquePtrTy, mI32 }));
-    registry.emplace(ID::READ_I64, EliderAPI(ID::READ_I64, "read_tensor_i64", voidTy, {  opaquePtrTy, mI64 }));
-    registry.emplace(ID::READ_F32, EliderAPI(ID::READ_F32, "read_tensor_f32", voidTy, {  opaquePtrTy, mf32 }));
-    registry.emplace(ID::READ_DBL, EliderAPI(ID::READ_DBL, "read_tensor_dbl", voidTy, {  opaquePtrTy, mdbl }));
+    registry.emplace(ID::READ_I32, EliderAPI(ID::READ_I32, "read_tensor_i32", {}, {  opaquePtrTy, mI32 }));
+    registry.emplace(ID::READ_I64, EliderAPI(ID::READ_I64, "read_tensor_i64", {}, {  opaquePtrTy, mI64 }));
+    registry.emplace(ID::READ_F32, EliderAPI(ID::READ_F32, "read_tensor_f32", {}, {  opaquePtrTy, mf32 }));
+    registry.emplace(ID::READ_DBL, EliderAPI(ID::READ_DBL, "read_tensor_dbl", {}, {  opaquePtrTy, mdbl }));
 
-    registry.emplace(ID::ECHO_I32, EliderAPI(ID::ECHO_I32, "print_tensor_i32", voidTy, { mI32 }));
-    registry.emplace(ID::ECHO_I64, EliderAPI(ID::ECHO_I64, "print_tensor_i64", voidTy, { mI64 }));
-    registry.emplace(ID::ECHO_F32, EliderAPI(ID::ECHO_F32, "print_tensor_f32", voidTy, { mf32 }));
-    registry.emplace(ID::ECHO_DBL, EliderAPI(ID::ECHO_DBL, "print_tensor_dbl", voidTy, { mdbl }));
+    registry.emplace(ID::ECHO_I32, EliderAPI(ID::ECHO_I32, "print_tensor_i32", {}, { mI32 }));
+    registry.emplace(ID::ECHO_I64, EliderAPI(ID::ECHO_I64, "print_tensor_i64", {}, { mI64 }));
+    registry.emplace(ID::ECHO_F32, EliderAPI(ID::ECHO_F32, "print_tensor_f32", {}, { mf32 }));
+    registry.emplace(ID::ECHO_DBL, EliderAPI(ID::ECHO_DBL, "print_tensor_dbl", {}, { mdbl }));
   }
 
   void declareAPI(EliderAPI::ID id, OpBuilder &builder) {
@@ -96,9 +96,11 @@ public:
     if (!module.lookupSymbol<func::FuncOp>(api.name)) {
       OpBuilder::InsertionGuard guard(builder);
       builder.setInsertionPointToStart(module.getBody());
-      func::FuncOp funcType =
-          mlir::FunctionType::get(api.outputTy, api.inputTypes, false);
-      builder.create<func::FuncOp>(module.getLoc(), api.name, funcType);
+      auto funcType = builder.getFunctionType(api.inputTypes, api.outputTy);
+          // mlir::FunctionType::get(builder.getContext(), api.inputTypes, {api.outputTy});
+      StringAttr vis = StringAttr::get(builder.getContext(), "private");
+      auto funcOp = builder.create<func::FuncOp>(module.getLoc(), api.name, funcType);
+      funcOp.setSymVisibilityAttr(vis);
     }
   }
 
@@ -106,8 +108,9 @@ public:
     assert((registry.find(id) != registry.end()) &&
         "apiId not found in registry");
     const EliderAPI &api = registry.at(id);
+    auto symbol = mlir::SymbolRefAttr::get(builder.getContext(), api.name);
     auto callOp = builder.create<func::CallOp>(
-      loc, api.name, {api.outputTy}, api.inputTypes
+      loc, symbol, api.outputTy, params
     );
     return callOp->getResults();
   }
@@ -121,7 +124,7 @@ static int64_t ArrayAttrIntVal(ArrayAttr a, int i) {
   return (a.getValue()[i]).cast<IntegerAttr>().getInt();
 }
 
-static int64_t computeSizeInBytes(KrnlGlobalOp &krnlGlobalOp) const {
+static int64_t computeSizeInBytes(KrnlGlobalOp &krnlGlobalOp) {
   // Compute total number of elements.
   const auto shape = (krnlGlobalOp.getShape()).dyn_cast<ArrayAttr>();
   int64_t numElements = 1;
@@ -134,10 +137,11 @@ static int64_t computeSizeInBytes(KrnlGlobalOp &krnlGlobalOp) const {
   return numElements * getMemRefEltSizeInBytes(memRefTy);
 }
 
-static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &rewriter, EliderRegistry &reg) {
+static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &builder, EliderRegistry &reg) {
   MLIRContext *context = krnlGlobalOp.getContext();
   Location loc = krnlGlobalOp.getLoc();
   ModuleOp module = krnlGlobalOp->getParentOfType<ModuleOp>();
+  IRRewriter rewriter(builder);
   MultiDialectBuilder<LLVMBuilder, MemRefBuilder> create(rewriter, loc);
 
   // The element type of the array.
@@ -153,9 +157,11 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &rewriter, EliderR
   {
     OpBuilder::InsertionGuard insertGuard(rewriter);
     rewriter.setInsertionPointToStart(module.getBody());
-
-    auto fileNameType = LLVM::LLVMArrayType::get(IntegerType::get(context, 8), sym.size());
-    fileGlob = create.llvm.globalOp(fileNameType, true, LLVM::Linkage::Internal, sym, krnlGlobalOp.getNameAttr());
+    
+    
+    StringAttr fileNameAttr = StringAttr::get(context, sym.str() + '\0');
+    auto fileNameType = LLVM::LLVMArrayType::get(IntegerType::get(context, 8), sym.size() + 1);
+    fileGlob = create.llvm.globalOp(fileNameType, true, LLVM::Linkage::Internal, sym, fileNameAttr);
 
     // write to file
     ArrayRef<char> rawData;
@@ -176,7 +182,7 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &rewriter, EliderR
 
   // insert func and read call
   Type eleType = memRefTy.getElementType();
-  Value UM = rewriter.create<memref::CastOp>(loc, UnrankedMemRefType::get(elemType, 0), alloc.getMemref()).getDest();
+  Value UM = rewriter.create<memref::CastOp>(loc, UnrankedMemRefType::get(eleType, 0), alloc.getMemref()).getDest();
 
   Type i8Type = IntegerType::get(context, 8);
   Type i64Type = IntegerType::get(context, 64);
@@ -185,32 +191,41 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &rewriter, EliderR
   Value zeroI64 = create.llvm.constant(i64Type, (int64_t)0);
   Value strAddr = create.llvm.getElemPtr(i8PtrTy, address, {zeroI64, zeroI64});
 
-  auto int32Ty = IntegerType::get(context, 32);
-  auto int64Ty = IntegerType::get(context, 64);
-  auto floatTy = FloatType::getF32(context);
-  auto dblTy = FloatType::getF64(context); 
-
   TypeSwitch<Type>(eleType)
-    .Case<int32Ty>([&]() {
-      reg.declareAPI(EliderAPI::ID::READ_I32, rewriter);
-      reg.callAPI(EliderAPI::ID::READ_I32, rewriter, loc, { strAddr, UM });
+    .Case<IntegerType>([&](IntegerType ty) {
+      unsigned b = ty.getWidth();
+      if (b == 32) {
+        reg.declareAPI(EliderAPI::ID::READ_I32, rewriter);
+        reg.callAPI(EliderAPI::ID::READ_I32, rewriter, loc, { strAddr, UM });
+      } 
+      else if (b == 64) {
+      	reg.declareAPI(EliderAPI::ID::READ_I64, rewriter);
+      	reg.callAPI(EliderAPI::ID::READ_I64, rewriter, loc, { strAddr, UM });
+      }
+      else {
+        ty.dump();
+        llvm_unreachable("Unsupported 2alloc type");
+      }
     })
-    .Case<int64Ty>([&]() {
-      reg.declareAPI(EliderAPI::ID::READ_I64, rewriter);
-      reg.callAPI(EliderAPI::ID::READ_I64, rewriter, loc, { strAddr, UM });
-    })
-    .Case<floatTy>([&]() {
-      reg.declareAPI(EliderAPI::ID::READ_F32, rewriter);
-      reg.callAPI(EliderAPI::ID::READ_F32, rewriter, loc, { strAddr, UM });
-    })
-    .Case<dblTy>([&]() {
-      reg.declareAPI(EliderAPI::ID::READ_DBL, rewriter);
-      reg.callAPI(EliderAPI::ID::READ_DBL, rewriter, loc, { strAddr, UM });
+    .Case<FloatType>([&](FloatType ty) {
+      unsigned b = ty.getWidth();
+      if (b == 32) {
+        reg.declareAPI(EliderAPI::ID::READ_F32, rewriter);
+        reg.callAPI(EliderAPI::ID::READ_F32, rewriter, loc, { strAddr, UM });
+      }
+      else if (b == 64) {
+        reg.declareAPI(EliderAPI::ID::READ_DBL, rewriter);
+        reg.callAPI(EliderAPI::ID::READ_DBL, rewriter, loc, { strAddr, UM });
+      }
+      else {
+        ty.dump();
+        llvm_unreachable("Unsupported 2alloc type");
+      }
     })
     .Default([&](Type ty) {
       ty.dump();
       llvm_unreachable("Unsupported 2alloc type");
-    })
+    });
   rewriter.replaceOp(krnlGlobalOp, { alloc.getMemref() }); 
 }
 
@@ -226,6 +241,10 @@ struct KrnlGlobToAllocPass : public PassWrapper<KrnlGlobToAllocPass, OperationPa
   StringRef getDescription() const override {
     return "Convert krnl.glob to memref.alloc and read from file";
   }
+  Option<bool> omitEntryPoint{*this, "omit-entry-point", llvm::cl::desc(
+    "Delete Krnl entry point to exclude runtime APIs.\n"
+    "The generated IR is used for PL pass"),
+    llvm::cl::init(false)};
 
   void runOnOperation() final;
 };
@@ -237,15 +256,18 @@ void KrnlGlobToAllocPass::runOnOperation() {
   LowerToLLVMOptions options(ctx, dataLayoutAnalysis.getAtOrAbove(module));
 
   // Delete entry point
-  OpBuilder b(module);
-  module->walk([&](KrnlEntryPointOp op) {
-    op.erase();
-  });
+  if (omitEntryPoint) {
+    OpBuilder b(module);
+    module->walk([&](KrnlEntryPointOp op) {
+      op.erase();
+    });
+  }
 
   // convert krnl glob
   EliderRegistry reg(module);
   module->walk([&](KrnlGlobalOp op) {
-    allocAndRead(op, OpBuilder(op), reg);
+    OpBuilder bb(op);
+    allocAndRead(op, bb, reg);
   });
 }
 

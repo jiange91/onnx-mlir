@@ -71,6 +71,9 @@ void read_tensor(const char *file, const DynamicMemRefType<T> &m) {
     num_eles *= m.sizes[i];
   }
   FILE *f = fopen(file, "r");
+  if (!f) {
+    std::cout << "Can't open file " << file << std::endl;
+  }
   size_t read = fread(m.data, sizeof(T), num_eles, f);
   if (read < num_eles)
     std::cout << "Err when reading file " << file << std::endl;
@@ -108,12 +111,12 @@ extern "C" {
   void _mlir_ciface_print_tensor_i32(UnrankedMemRefType<int32_t> *m);
   void _mlir_ciface_print_tensor_i64(UnrankedMemRefType<int64_t> *m);
   void _mlir_ciface_print_tensor_f32(UnrankedMemRefType<float> *m);
-  void _mlir_ciface_print_tensor_f32(UnrankedMemRefType<double> *m);
+  void _mlir_ciface_print_tensor_dbl(UnrankedMemRefType<double> *m);
 
-  void _mlir_ciface_read_tensor_i64(const char *file, UnrankedMemRefType<int32_t> *m);
+  void _mlir_ciface_read_tensor_i32(const char *file, UnrankedMemRefType<int32_t> *m);
   void _mlir_ciface_read_tensor_i64(const char *file, UnrankedMemRefType<int64_t> *m);
   void _mlir_ciface_read_tensor_f32(const char *file, UnrankedMemRefType<float> *m);
-  void _mlir_ciface_read_tensor_f32(const char *file, UnrankedMemRefType<double> *m);
+  void _mlir_ciface_read_tensor_dbl(const char *file, UnrankedMemRefType<double> *m);
 }
 
 #endif
