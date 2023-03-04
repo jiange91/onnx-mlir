@@ -112,6 +112,7 @@ std::unique_ptr<mlir::Pass> createConvertKrnlToLLVMPass();
 std::unique_ptr<mlir::Pass> createConvertKrnlToLLVMPass(
     bool verifyInputTensors);
 std::unique_ptr<mlir::Pass> createKrnlGlobToMemrefPass();
+std::unique_ptr<mlir::Pass> createKrnlGlobToAllocPass();
 } // namespace krnl
 
 /// Pass for lowering Onnx ops to TOSA dialect

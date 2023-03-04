@@ -97,6 +97,10 @@ void initOMPasses(int optLevel) {
   });
 
   mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
+    return krnl::createKrnlGlobToAllocPass();
+  });
+
+  mlir::registerPass([]() -> std::unique_ptr<mlir::Pass> {
     return createDisconnectKrnlDimFromAllocPass();
   });
 
