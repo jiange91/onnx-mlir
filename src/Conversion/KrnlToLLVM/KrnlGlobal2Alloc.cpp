@@ -30,6 +30,7 @@
 #include <iostream>
 #include <fstream>
 #include <map>
+#include <vector>
 
 #define DEBUG_TYPE "krnlgbl_to_memref"
 
@@ -124,16 +125,20 @@ static int64_t ArrayAttrIntVal(ArrayAttr a, int i) {
   return (a.getValue()[i]).cast<IntegerAttr>().getInt();
 }
 
-static int64_t computeSizeInBytes(KrnlGlobalOp &krnlGlobalOp) {
+static int64_t getNumElements(KrnlGlobalOp &krnlGlobalOp) {
   // Compute total number of elements.
   const auto shape = (krnlGlobalOp.getShape()).dyn_cast<ArrayAttr>();
   int64_t numElements = 1;
   for (unsigned int i = 0; i < shape.size(); ++i)
     numElements *= ArrayAttrIntVal(shape, i);
 
+  return numElements;
+}
+
+static int64_t computeSizeInBytes(KrnlGlobalOp &krnlGlobalOp) {
+  int64_t numElements = getNumElements(krnlGlobalOp);
   const auto type = krnlGlobalOp.getResult().getType();
   const auto memRefTy = type.cast<mlir::MemRefType>();
-
   return numElements * getMemRefEltSizeInBytes(memRefTy);
 }
 
@@ -164,13 +169,27 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &builder, EliderRe
     fileGlob = create.llvm.globalOp(fileNameType, true, LLVM::Linkage::Internal, sym, fileNameAttr);
 
     // write to file
+    llvm::dbgs() << "dumping ... " << sym.str() << "\n";
     ArrayRef<char> rawData;
     int64_t sizeInBytes = computeSizeInBytes(krnlGlobalOp);
     auto value = krnlGlobalOp.getValue().value();
     if (auto attr = value.dyn_cast<DenseResourceElementsAttr>()) {
       rawData = attr.getRawHandle().getBlob()->getData();
     } else {
-      rawData = value.cast<DenseElementsAttr>().getRawData();
+      DenseElementsAttr denseAttr =
+        value.cast<DenseElementsAttr>();
+      if (!denseAttr.isSplat()) {
+        rawData = denseAttr.getRawData();
+      } else {
+        std::string buffer;
+        std::string cst(denseAttr.getRawData().data(), denseAttr.getRawData().size());
+        buffer.reserve(sizeInBytes);
+        int64_t times = getNumElements(krnlGlobalOp);
+        for (int64_t i = 0; i < times; ++ i)
+	  buffer += cst;
+        rawData = ArrayRef<char>(buffer.c_str(), buffer.size());
+	// llvm::dbgs() << rawData.size() << ", " << sizeInBytes << ", " << buffer.size() << "\n";
+      }
     }
     assert(((int64_t)rawData.size() == sizeInBytes) && "Data size mismatch.");
     std::ofstream wf(sym.data(), std::ios::out | std::ios::binary);

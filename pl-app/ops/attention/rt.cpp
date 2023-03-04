@@ -1,6 +1,6 @@
 #include <iostream>
 #include <vector>
-#include "common.h"
+#include "utils.h"
 
 #include "OnnxMlirRuntime.h"
 
@@ -8,22 +8,17 @@
 extern "C" OMTensorList *run_main_graph(OMTensorList *);
 
 int main(int argc, char **argv) {
-  // Create an input tensor list of 1 tensor.
-  int inputNum = 1;
-  OMTensor **inputTensors = (OMTensor **)malloc(inputNum * sizeof(OMTensor *));
-  // The first input is of tensor<1x1x28x28xf32>.
   int64_t rank = 3;
   int64_t shape[] = {1008, 64, 512};
-  float *input = read_tensor("dummy_in.dat", shape, 3);
-  // float *output = read_tensor("dummy_out.dat", shape, 3);
-  int64_t flush_size = atol(argv[1]);
+  StridedMemRefType<float, 3> X(shape);
+  DynamicMemRefType<float> dX(X);
+  read_tensor("dummy_in.dat", dX);
 
-  OMTensor *tensor = omTensorCreate(input, shape, rank, ONNX_TYPE_FLOAT);
+  // float *output = read_tensor("dummy_out.dat", shape, 3);
+
+  OMTensor *tensor = omTensorCreate(X.data, shape, rank, ONNX_TYPE_FLOAT);
   // Create a tensor list.
-  inputTensors[0] = tensor;
-  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, inputNum);
-  
-  flush_local(flush_size);
+  OMTensorList *tensorListIn = omTensorListCreate(&tensor, 1);
   
   uint64_t start_ns = getCurNs();
   // Compute outputs.

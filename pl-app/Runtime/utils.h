@@ -6,6 +6,16 @@
 #include <cassert>
 #include <initializer_list>
 #include <iostream>
+#include <time.h>
+
+#define abs(X) ((X) < 0 ? -1 * (X) : (X))
+
+static inline uint64_t getCurNs() {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  uint64_t t = ts.tv_sec*1000*1000*1000 + ts.tv_nsec;
+  return t;
+}
 
 template <typename T, int N>
 struct StridedMemRefType {

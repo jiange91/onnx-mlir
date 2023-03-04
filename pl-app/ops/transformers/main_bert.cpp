@@ -1,6 +1,6 @@
 #include <iostream>
 #include <vector>
-#include "common.h"
+#include "utils.h"
 
 #include "OnnxMlirRuntime.h"
 
@@ -9,7 +9,6 @@ extern "C" OMTensorList *run_main_graph(OMTensorList *);
 
 int main(int argc, char **argv) {
   int inputNum = 1;
-  OMTensor **inputTensors = (OMTensor **)malloc(inputNum * sizeof(OMTensor *));
 
   int64_t rank = 2;
   int64_t shape[] = {64, 20};
@@ -18,7 +17,7 @@ int main(int argc, char **argv) {
 
   OMTensor *tensor = omTensorCreate(input, shape, rank, ONNX_TYPE_FLOAT);
   // Create a tensor list.
-  inputTensors[0] = tensor;
+  OMTensor *inputTensors[1] = {tensor};
   OMTensorList *tensorListIn = omTensorListCreate(inputTensors, inputNum);
   
   flush_local(flush_size);
