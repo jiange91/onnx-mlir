@@ -46,16 +46,6 @@ public:
     GET_OMT_ARRAY,
     PRINT_OMTENSOR,
     GET_OMTENSOR_LIST_SIZE,
-
-    // for memref elider
-    READ_I32,
-    READ_I64,
-    READ_F32,
-    READ_DBL,
-    ECHO_I32,
-    ECHO_I64,
-    ECHO_F32,
-    ECHO_DBL,
   };
 
   // Call the runtime API identified by \p apiId, return the SSA value
@@ -91,7 +81,7 @@ class RuntimeAPIRegistry final {
 public:
   using ApiRegistry = std::map<RuntimeAPI::API, RuntimeAPI>;
 
-  RuntimeAPIRegistry(mlir::ModuleOp &module, mlir::OpBuilder &builder, bool elider = false);
+  RuntimeAPIRegistry(mlir::ModuleOp &module, mlir::OpBuilder &builder);
   ~RuntimeAPIRegistry();
 
   static const RuntimeAPIRegistry build(

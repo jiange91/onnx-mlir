@@ -10,6 +10,7 @@
 //
 #include "mlir/Analysis/DataLayoutAnalysis.h"
 #include "mlir/Conversion/LLVMCommon/Pattern.h"
+#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/DialectResourceBlobManager.h"
 #include "llvm/ADT/TypeSwitch.h"
@@ -28,6 +29,7 @@
 #include "llvm/ADT/Sequence.h"
 #include <iostream>
 #include <fstream>
+#include <map>
 
 #define DEBUG_TYPE "krnlgbl_to_memref"
 
@@ -36,147 +38,180 @@ using namespace mlir;
 namespace onnx_mlir {
 namespace krnl {
 
-class KrnlGlobalOp2Alloc : public ConvertOpToLLVMPattern<KrnlGlobalOp> {
+class EliderRegistry;
+class EliderAPI final {
+  friend class EliderRegistry;
 public:
-  using ConvertOpToLLVMPattern<KrnlGlobalOp>::ConvertOpToLLVMPattern;
+  enum class ID {
+    READ_I32,
+    READ_I64,
+    READ_F32,
+    READ_DBL,
 
-  LogicalResult matchAndRewrite(KrnlGlobalOp krnlGlobalOp, KrnlGlobalOpAdaptor adaptor,
-      ConversionPatternRewriter &rewriter) const override {
-    MLIRContext *context = krnlGlobalOp.getContext();
-    Location loc = krnlGlobalOp.getLoc();
-    ModuleOp module = krnlGlobalOp->getParentOfType<ModuleOp>();
-    MultiDialectBuilder<LLVMBuilder, MemRefBuilder> create(rewriter, loc);
+    ECHO_I32,
+    ECHO_I64,
+    ECHO_F32,
+    ECHO_DBL,
+  };
 
-    // The element type of the array.
-    const Type type = krnlGlobalOp->getResult(0).getType();
-    const MemRefType memRefTy = type.cast<mlir::MemRefType>();
-    const Type constantElementType =
-        typeConverter->convertType(memRefTy.getElementType());
-    Type globalType = constantElementType;
+private:
+  EliderAPI(ID id, StringRef name, Type output, ArrayRef<Type> input) : id(id), name(name), outputTy(output), inputTypes(input.begin(), input.end()) {}
+  ID id;
+  StringRef name;
+  mlir::Type outputTy;
+  llvm::SmallVector<Type, 2> inputTypes;
+};
 
-    assert(krnlGlobalOp.getValue().has_value() &&
-           "Krnl Global must always have a value");
+class EliderRegistry final {
+public:
 
-    // create file symbol
-    LLVM::GlobalOp fileGlob;
-    StringRef sym = krnlGlobalOp.getName();
-    {
-      OpBuilder::InsertionGuard insertGuard(rewriter);
-      rewriter.setInsertionPointToStart(module.getBody());
+  EliderAPI(mlir::ModuleOp &module): module(module) {
+    MLIRContext *context = module.getContext();
+    auto voidTy = LLVM::LLVMVoidType::get(context);
+    auto int8Ty = IntegerType::get(context, 8);
+    auto int32Ty = IntegerType::get(context, 32);
+    auto int64Ty = IntegerType::get(context, 64);
+    auto floatTy = FloatType::getF32(context);
+    auto dblTy = FloatType::getF64(context);
+    auto opaquePtrTy = LLVM::LLVMPointerType::get(int8Ty);
+    auto mI32 = UnrankedMemRefType::get(int32Ty, 0);
+    auto mI64 = UnrankedMemRefType::get(int64Ty, 0);
+    auto mf32 = UnrankedMemRefType::get(floatTy, 0);
+    auto mdbl = UnrankedMemRefType::get(dblTy, 0);
 
-      auto fileNameType = LLVM::LLVMArrayType::get(IntegerType::get(context, 8), sym.size());
-      fileGlob = create.llvm.globalOp(fileNameType, true, LLVM::Linkage::Internal, sym, krnlGlobalOp.getNameAttr());
+    using ID = EliderAPI::ID;
+    registry.emplace(ID::READ_I32, EliderAPI(ID::READ_I32, "read_tensor_i32", voidTy, {  opaquePtrTy, mI32 }));
+    registry.emplace(ID::READ_I64, EliderAPI(ID::READ_I64, "read_tensor_i64", voidTy, {  opaquePtrTy, mI64 }));
+    registry.emplace(ID::READ_F32, EliderAPI(ID::READ_F32, "read_tensor_f32", voidTy, {  opaquePtrTy, mf32 }));
+    registry.emplace(ID::READ_DBL, EliderAPI(ID::READ_DBL, "read_tensor_dbl", voidTy, {  opaquePtrTy, mdbl }));
 
-      // write to file
-      ArrayRef<char> rawData;
-      int64_t sizeInBytes = computeSizeInBytes(krnlGlobalOp);
-      auto value = krnlGlobalOp.getValue().value();
-      if (auto attr = value.dyn_cast<DenseResourceElementsAttr>()) {
-        rawData = attr.getRawHandle().getBlob()->getData();
-      } else {
-	rawData = value.cast<DenseElementsAttr>().getRawData();
-      }
-      assert(((int64_t)rawData.size() == sizeInBytes) && "Data size mismatch.");
-      std::ofstream wf(sym.data(), std::ios::out | std::ios::binary);
-      assert(wf && "cannot open file");
-      wf.write(rawData.data(), sizeInBytes);
-      wf.close();
+    registry.emplace(ID::ECHO_I32, EliderAPI(ID::ECHO_I32, "print_tensor_i32", voidTy, { mI32 }));
+    registry.emplace(ID::ECHO_I64, EliderAPI(ID::ECHO_I64, "print_tensor_i64", voidTy, { mI64 }));
+    registry.emplace(ID::ECHO_F32, EliderAPI(ID::ECHO_F32, "print_tensor_f32", voidTy, { mf32 }));
+    registry.emplace(ID::ECHO_DBL, EliderAPI(ID::ECHO_DBL, "print_tensor_dbl", voidTy, { mdbl }));
+  }
+
+  void declareAPI(EliderAPI::ID id, OpBuilder &builder) {
+    const EliderAPI &api = registry.at(id);
+    if (!module.lookupSymbol<func::FuncOp>(api.name)) {
+      OpBuilder::InsertionGuard guard(builder);
+      builder.setInsertionPointToStart(module.getBody());
+      func::FuncOp funcType =
+          mlir::FunctionType::get(api.outputTy, api.inputTypes, false);
+      builder.create<func::FuncOp>(module.getLoc(), api.name, funcType);
     }
-    auto alloc = create.mem.alignedAlloc(memRefTy);
-    rewriter.replaceOp(krnlGlobalOp, { alloc.getMemref() });
-    return mlir::success();
+  }
+
+  Operation::result_range callAPI(EliderAPI::ID id, OpBuilder &builder, Location loc, ValueRange params) {
+    assert((registry.find(id) != registry.end()) &&
+        "apiId not found in registry");
+    const EliderAPI &api = registry.at(id);
+    auto callOp = builder.create<func::CallOp>(
+      loc, api.name, {api.outputTy}, api.inputTypes
+    );
+    return callOp->getResults();
   }
 
 private:
-  static int64_t ArrayAttrIntVal(ArrayAttr a, int i) {
-    return (a.getValue()[i]).cast<IntegerAttr>().getInt();
-  }
-
-  int64_t computeSizeInBytes(KrnlGlobalOp &krnlGlobalOp) const {
-    // Compute total number of elements.
-    const auto shape = (krnlGlobalOp.getShape()).dyn_cast<ArrayAttr>();
-    int64_t numElements = 1;
-    for (unsigned int i = 0; i < shape.size(); ++i)
-      numElements *= ArrayAttrIntVal(shape, i);
-
-    const auto type = krnlGlobalOp.getResult().getType();
-    const auto memRefTy = type.cast<mlir::MemRefType>();
-
-    return numElements * getMemRefEltSizeInBytes(memRefTy);
-  }
-
-  // Store the given address into a MemRefDescriptor (a struct).
-  MemRefDescriptor createMemRefDescriptor(Value address, MemRefType memRefType,
-      Location loc, OpBuilder &builder) const {
-    Type elementType = memRefType.getElementType();
-    LLVMTypeConverter &typeConverter = *getTypeConverter();
-    Type llvmElemType = typeConverter.convertType(elementType);
-    MultiDialectBuilder<LLVMBuilder> create(builder, loc);
-
-    // Prepare data to be inserted into a MemRefDescriptor (a struct).
-    auto ptrType = LLVM::LLVMPointerType::get(llvmElemType);
-    // Bitcast the address to the MemRefType's element type.
-    Value bitCastOp = create.llvm.bitcast(ptrType, address);
-    // Create llvm MemRef from original MemRef and fill the data pointers.
-    return MemRefDescriptor::fromStaticShape(
-        builder, loc, typeConverter, memRefType, bitCastOp);
-  }
-
-  // Generate a global string for each krnlGlobalOp string value, and store
-  // the address of the global strings into an array. Return the array address.
-  LLVM::GlobalOp lowerStringLiteral(
-      KrnlGlobalOp &krnlGlobalOp, Type globalType, OpBuilder &builder) const {
-    assert(krnlGlobalOp.getValue().value().isa<DenseElementsAttr>() &&
-           "Expecting a dense value");
-
-    Location loc = krnlGlobalOp.getLoc();
-    MultiDialectBuilder<LLVMBuilder> create(builder, loc);
-
-    ModuleOp module = krnlGlobalOp->getParentOfType<ModuleOp>();
-    DenseElementsAttr denseAttr =
-        krnlGlobalOp.getValue().value().cast<DenseElementsAttr>();
-
-    Type i8Type = IntegerType::get(builder.getContext(), 8);
-    Type i8PtrType = LLVM::LLVMPointerType::get(i8Type);
-
-    // Generate LLVM GlobalOps for each string in the KrnlGlobalOp dense
-    // attribute.
-    SmallVector<LLVM::GlobalOp> globalOps;
-    for (StringRef str : denseAttr.getValues<StringRef>()) {
-      LLVM::GlobalOp globalOp = krnl::getOrCreateGlobalString(
-          str, loc, builder, module, getTypeConverter());
-      globalOps.push_back(globalOp);
-    }
-
-    // Generate an LLVM GlobalOps with an initializer region containing one
-    // block.
-    auto arrayType = LLVM::LLVMArrayType::get(i8PtrType, globalOps.size());
-    auto global = create.llvm.globalOp(arrayType,
-        /*isConstant=*/true, LLVM::Linkage::Internal, krnlGlobalOp.getName(),
-        Attribute());
-    Region &region = global.getInitializerRegion();
-    Block *block = builder.createBlock(&region);
-
-    // Initialize an array with the addresses of the global strings.
-    builder.setInsertionPoint(block, block->begin());
-    Value array = builder.create<LLVM::UndefOp>(loc, arrayType);
-
-    int32_t index = 0;
-    Value lastValue = array;
-    for (const LLVM::GlobalOp &globalOp : globalOps) {
-      Value strAddr = krnl::getPtrToGlobalString(globalOp, loc, builder);
-      lastValue =
-          create.llvm.insertValue(arrayType, lastValue, strAddr, {index++});
-    }
-
-    create.llvm._return(lastValue);
-    return global;
-  }
+  std::map<EliderAPI::ID, EliderAPI> registry;
+  mlir::ModuleOp &module;
 };
 
-void populateKrnlGlobalToAllocPattern(LLVMTypeConverter &typeConverter,
-    RewritePatternSet &patterns) {
-  patterns.insert<KrnlGlobalOp2Alloc>(typeConverter);
+static int64_t ArrayAttrIntVal(ArrayAttr a, int i) {
+  return (a.getValue()[i]).cast<IntegerAttr>().getInt();
+}
+
+static int64_t computeSizeInBytes(KrnlGlobalOp &krnlGlobalOp) const {
+  // Compute total number of elements.
+  const auto shape = (krnlGlobalOp.getShape()).dyn_cast<ArrayAttr>();
+  int64_t numElements = 1;
+  for (unsigned int i = 0; i < shape.size(); ++i)
+    numElements *= ArrayAttrIntVal(shape, i);
+
+  const auto type = krnlGlobalOp.getResult().getType();
+  const auto memRefTy = type.cast<mlir::MemRefType>();
+
+  return numElements * getMemRefEltSizeInBytes(memRefTy);
+}
+
+static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &rewriter, EliderRegistry &reg) {
+  MLIRContext *context = krnlGlobalOp.getContext();
+  Location loc = krnlGlobalOp.getLoc();
+  ModuleOp module = krnlGlobalOp->getParentOfType<ModuleOp>();
+  MultiDialectBuilder<LLVMBuilder, MemRefBuilder> create(rewriter, loc);
+
+  // The element type of the array.
+  const Type type = krnlGlobalOp->getResult(0).getType();
+  const MemRefType memRefTy = type.cast<mlir::MemRefType>();
+
+  assert(krnlGlobalOp.getValue().has_value() &&
+          "Krnl Global must always have a value");
+
+  // create file symbol
+  LLVM::GlobalOp fileGlob;
+  StringRef sym = krnlGlobalOp.getName();
+  {
+    OpBuilder::InsertionGuard insertGuard(rewriter);
+    rewriter.setInsertionPointToStart(module.getBody());
+
+    auto fileNameType = LLVM::LLVMArrayType::get(IntegerType::get(context, 8), sym.size());
+    fileGlob = create.llvm.globalOp(fileNameType, true, LLVM::Linkage::Internal, sym, krnlGlobalOp.getNameAttr());
+
+    // write to file
+    ArrayRef<char> rawData;
+    int64_t sizeInBytes = computeSizeInBytes(krnlGlobalOp);
+    auto value = krnlGlobalOp.getValue().value();
+    if (auto attr = value.dyn_cast<DenseResourceElementsAttr>()) {
+      rawData = attr.getRawHandle().getBlob()->getData();
+    } else {
+      rawData = value.cast<DenseElementsAttr>().getRawData();
+    }
+    assert(((int64_t)rawData.size() == sizeInBytes) && "Data size mismatch.");
+    std::ofstream wf(sym.data(), std::ios::out | std::ios::binary);
+    assert(wf && "cannot open file");
+    wf.write(rawData.data(), sizeInBytes);
+    wf.close();
+  }
+  auto alloc = create.mem.alignedAlloc(memRefTy);
+
+  // insert func and read call
+  Type eleType = memRefTy.getElementType();
+  Value UM = rewriter.create<memref::CastOp>(loc, UnrankedMemRefType::get(elemType, 0), alloc.getMemref()).getDest();
+
+  Type i8Type = IntegerType::get(context, 8);
+  Type i64Type = IntegerType::get(context, 64);
+  Type i8PtrTy = LLVM::LLVMPointerType::get(i8Type);
+  Value address = create.llvm.addressOf(fileGlob);
+  Value zeroI64 = create.llvm.constant(i64Type, (int64_t)0);
+  Value strAddr = create.llvm.getElemPtr(i8PtrTy, address, {zeroI64, zeroI64});
+
+  auto int32Ty = IntegerType::get(context, 32);
+  auto int64Ty = IntegerType::get(context, 64);
+  auto floatTy = FloatType::getF32(context);
+  auto dblTy = FloatType::getF64(context); 
+
+  TypeSwitch<Type>(eleType)
+    .Case<int32Ty>([&]() {
+      reg.declareAPI(EliderAPI::ID::READ_I32, rewriter);
+      reg.callAPI(EliderAPI::ID::READ_I32, rewriter, loc, { strAddr, UM });
+    })
+    .Case<int64Ty>([&]() {
+      reg.declareAPI(EliderAPI::ID::READ_I64, rewriter);
+      reg.callAPI(EliderAPI::ID::READ_I64, rewriter, loc, { strAddr, UM });
+    })
+    .Case<floatTy>([&]() {
+      reg.declareAPI(EliderAPI::ID::READ_F32, rewriter);
+      reg.callAPI(EliderAPI::ID::READ_F32, rewriter, loc, { strAddr, UM });
+    })
+    .Case<dblTy>([&]() {
+      reg.declareAPI(EliderAPI::ID::READ_DBL, rewriter);
+      reg.callAPI(EliderAPI::ID::READ_DBL, rewriter, loc, { strAddr, UM });
+    })
+    .Default([&](Type ty) {
+      ty.dump();
+      llvm_unreachable("Unsupported 2alloc type");
+    })
+  rewriter.replaceOp(krnlGlobalOp, { alloc.getMemref() }); 
 }
 
 struct KrnlGlobToAllocPass : public PassWrapper<KrnlGlobToAllocPass, OperationPass<ModuleOp>> {
@@ -207,27 +242,11 @@ void KrnlGlobToAllocPass::runOnOperation() {
     op.erase();
   });
 
-  // Define the target for this lowering i.e. the LLVM dialect.
-  ConversionTarget target(*ctx);
-  target.addLegalDialect<LLVM::LLVMDialect>();
-  target.addLegalDialect<memref::MemRefDialect>();
-  target.addLegalOp<ModuleOp>();
-  target.addLegalDialect<func::FuncDialect>();
-  target.addIllegalOp<KrnlGlobalOp>();
-  target.markUnknownOpDynamicallyLegal([](Operation *op) {
-    return true;
+  // convert krnl glob
+  EliderRegistry reg(module);
+  module->walk([&](KrnlGlobalOp op) {
+    allocAndRead(op, OpBuilder(op), reg);
   });
-
-  // Convert types to legal types for the LLVM dialect.
-  LLVMTypeConverter typeConverter(ctx, options);
-  customizeTypeConverter(typeConverter);
-
-  RewritePatternSet patterns(ctx);
-  populateKrnlGlobalToAllocPattern(typeConverter, patterns);
-  if (failed(
-          applyFullConversion(getOperation(), target, std::move(patterns)))) {
-    signalPassFailure();
-  }
 }
 
 std::unique_ptr<mlir::Pass> createKrnlGlobToAllocPass() {
