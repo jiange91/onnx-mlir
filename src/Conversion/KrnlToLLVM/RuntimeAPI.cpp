@@ -57,7 +57,7 @@ Value RuntimeAPI::callApi(OpBuilder &builder, Location loc,
 
 RuntimeAPIRegistry::~RuntimeAPIRegistry() {}
 
-RuntimeAPIRegistry::RuntimeAPIRegistry(ModuleOp &module, OpBuilder &builder)
+RuntimeAPIRegistry::RuntimeAPIRegistry(ModuleOp &module, OpBuilder &builder, bool elider)
     : registry() {
   MLIRContext *context = module.getContext();
   auto voidTy = LLVM::LLVMVoidType::get(context);
@@ -85,12 +85,30 @@ RuntimeAPIRegistry::RuntimeAPIRegistry(ModuleOp &module, OpBuilder &builder)
     RuntimeAPI(API::PRINT_OMTENSOR, "omTensorPrint", voidTy, {opaquePtrTy, opaquePtrTy}),
     RuntimeAPI(API::GET_OMTENSOR_LIST_SIZE, "omTensorListGetSize", int64Ty, {opaquePtrTy}),
   };
+  
+  std::vector<RuntimeAPI> EliderAPI = {
+    RuntimeAPI(API::READ_I32, "read_tensor_i32", voidTy, {opaquePtrTy, opaquePtrTy}),
+    RuntimeAPI(API::READ_I64, "read_tensor_i64", voidTy, {opaquePtrTy, opaquePtrTy}),
+    RuntimeAPI(API::READ_F32, "read_tensor_f32", voidTy, {opaquePtrTy, opaquePtrTy}),
+    RuntimeAPI(API::READ_DBL, "read_tensor_dbl", voidTy, {opaquePtrTy, opaquePtrTy}),
+    RuntimeAPI(API::ECHO_I32, "print_tensor_i32", voidTy, {opaquePtrTy, opaquePtrTy}),
+    RuntimeAPI(API::ECHO_I64, "print_tensor_i64", voidTy, {opaquePtrTy, opaquePtrTy}),
+    RuntimeAPI(API::ECHO_F32, "print_tensor_f32", voidTy, {opaquePtrTy, opaquePtrTy}),
+    RuntimeAPI(API::ECHO_DBL, "print_tensor_dbl", voidTy, {opaquePtrTy, opaquePtrTy}),
+  };
   // clang-format on
 
   // Declare APIs in the current module and build an API registry mapping api
   // identities to a symbol reference to the API function.
-  for (auto &apiSpec : RuntimeAPISpecs) {
-    apiSpec.declareAPI(module, builder);
-    registry.emplace(apiSpec.id, apiSpec);
+  if (elider) {
+    for (auto &api : EliderAPI) {
+      apiSpec.declareAPI(module, builder);
+      registry.emplace(api.id, api);
+    }
+  } else {
+    for (auto &apiSpec : RuntimeAPISpecs) {
+      apiSpec.declareAPI(module, builder);
+      registry.emplace(apiSpec.id, apiSpec);
+    }
   }
 }
