@@ -45,7 +45,7 @@ public:
     MLIRContext *context = krnlGlobalOp.getContext();
     Location loc = krnlGlobalOp.getLoc();
     ModuleOp module = krnlGlobalOp->getParentOfType<ModuleOp>();
-    MultiDialectBuilder<LLVMBuilder> create(rewriter, loc);
+    MultiDialectBuilder<LLVMBuilder, MemRefBuilder> create(rewriter, loc);
 
     // The element type of the array.
     const Type type = krnlGlobalOp->getResult(0).getType();
@@ -58,49 +58,32 @@ public:
            "Krnl Global must always have a value");
 
     // create file symbol
-    LLVM::GlobalOp global;
+    LLVM::GlobalOp fileGlob;
     StringRef sym = krnlGlobalOp.getName();
     {
       OpBuilder::InsertionGuard insertGuard(rewriter);
       rewriter.setInsertionPointToStart(module.getBody());
 
       auto fileNameType = LLVM::LLVMArrayType::get(IntegerType::get(context, 8), sym.size());
-      global = create.llvm.globalOp(fileNameType, true, LLVM::Linkage::Internal, sym, krnlGlobalOp.getNameAttr());
+      fileGlob = create.llvm.globalOp(fileNameType, true, LLVM::Linkage::Internal, sym, krnlGlobalOp.getNameAttr());
 
       // write to file
-      auto value = krnlGlobalOp.getValue.value().cast<ElementsAttr>();
+      ArrayRef<char> rawData;
       int64_t sizeInBytes = computeSizeInBytes(krnlGlobalOp);
-      ArrayRef<char> rawData = value.getRawData();
+      auto value = krnlGlobalOp.getValue().value();
+      if (auto attr = value.dyn_cast<DenseResourceElementsAttr>()) {
+        rawData = attr.getRawHandle().getBlob()->getData();
+      } else {
+	rawData = value.cast<DenseElementsAttr>().getRawData();
+      }
       assert(((int64_t)rawData.size() == sizeInBytes) && "Data size mismatch.");
-      const char* buf = rawData.data();
-      std::ofstream wf(sym.data(), ios::out | ios::binary);
+      std::ofstream wf(sym.data(), std::ios::out | std::ios::binary);
       assert(wf && "cannot open file");
-      wf.write(buf, sizeInBytes);
+      wf.write(rawData.data(), sizeInBytes);
       wf.close();
     }
-
-    memref::GlobalOp global;
-    {
-      Location loc = krnlGlobalOp.getLoc();
-      ModuleOp module = krnlGlobalOp->getParentOfType<ModuleOp>();
-      OpBuilder::InsertionGuard insertGuard(rewriter);
-      rewriter.setInsertionPointToStart(module.getBody());
-
-      global = rewriter.create<memref::GlobalOp>(
-        loc,
-        krnlGlobalOp.getNameAttr(),
-        rewriter.getStringAttr("private"),
-        mlir::TypeAttr::get(memRefTy),
-        krnlGlobalOp.getValueAttr(),
-        rewriter.getUnitAttr(),
-        krnlGlobalOp.getAlignmentAttr()
-      );
-    }
-    rewriter.replaceOpWithNewOp<memref::GetGlobalOp>(
-      krnlGlobalOp,
-      global.getType(),
-      global.getSymNameAttr()
-    );
+    auto alloc = create.mem.alignedAlloc(memRefTy);
+    rewriter.replaceOp(krnlGlobalOp, { alloc.getMemref() });
     return mlir::success();
   }
 
@@ -203,10 +186,10 @@ struct KrnlGlobToAllocPass : public PassWrapper<KrnlGlobToAllocPass, OperationPa
   KrnlGlobToAllocPass(const KrnlGlobToAllocPass &pass)
       : PassWrapper<KrnlGlobToAllocPass, OperationPass<ModuleOp>>() {}
 
-  StringRef getArgument() const override { return "convert-krnl-glob-to-memref"; }
+  StringRef getArgument() const override { return "convert-krnl-glob-to-alloc"; }
 
   StringRef getDescription() const override {
-    return "Convert krnl.glob to memref.glob";
+    return "Convert krnl.glob to memref.alloc and read from file";
   }
 
   void runOnOperation() final;

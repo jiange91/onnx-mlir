@@ -102,7 +102,7 @@ RuntimeAPIRegistry::RuntimeAPIRegistry(ModuleOp &module, OpBuilder &builder, boo
   // identities to a symbol reference to the API function.
   if (elider) {
     for (auto &api : EliderAPI) {
-      apiSpec.declareAPI(module, builder);
+      api.declareAPI(module, builder);
       registry.emplace(api.id, api);
     }
   } else {
