@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include "utils.h"
+#include "common.h"
 
 #include "OnnxMlirRuntime.h"
 
@@ -8,19 +9,16 @@
 extern "C" OMTensorList *run_main_graph(OMTensorList *);
 
 int main(int argc, char **argv) {
-  int inputNum = 1;
-
   int64_t rank = 2;
   int64_t shape[] = {64, 20};
-  float *input = read_tensor("dummy_in.dat", shape, rank);
-  int64_t flush_size = atol(argv[1]);
+  StridedMemRefType<int64_t, 2> X(shape);
+  DynamicMemRefType<int64_t> dX(X);
+  read_tensor("dummy_in.dat", dX);
 
-  OMTensor *tensor = omTensorCreate(input, shape, rank, ONNX_TYPE_FLOAT);
+  OMTensor *tensor = omTensorCreate(X.data, shape, rank, ONNX_TYPE_FLOAT);
   // Create a tensor list.
   OMTensor *inputTensors[1] = {tensor};
-  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, inputNum);
-  
-  flush_local(flush_size);
+  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, 1);
   
   uint64_t start_ns = getCurNs();
   // Compute outputs.
@@ -34,7 +32,7 @@ int main(int argc, char **argv) {
   int64_t outrank = omTensorGetRank(y);
   int64_t *outshapes = omTensorGetShape(y);
   for (int64_t i = 0; i < outrank; ++i ) {
-    printf("%l\n", outshapes[i]);
+    printf("%ld\n", outshapes[i]);
   }
   
  // float *prediction = (float *)omTensorGetDataPtr(y);

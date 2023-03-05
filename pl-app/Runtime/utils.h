@@ -8,15 +8,6 @@
 #include <iostream>
 #include <time.h>
 
-#define abs(X) ((X) < 0 ? -1 * (X) : (X))
-
-static inline uint64_t getCurNs() {
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
-  uint64_t t = ts.tv_sec*1000*1000*1000 + ts.tv_nsec;
-  return t;
-}
-
 template <typename T, int N>
 struct StridedMemRefType {
 public:
@@ -40,6 +31,7 @@ public:
     T *buf = static_cast<T *>(aligned_alloc(4096, num_eles * sizeof(T)));
     basePtr = data = buf;
   }
+  
 };
 
 template <typename T>
@@ -72,14 +64,20 @@ public:
     strides = sizes + rank;
   }
 
+  int64_t getNumElements() const {
+    if (rank == 0)
+      return 0;
+    int64_t num_eles = 1;
+    for (int i = 0; i < rank; ++ i) {
+      num_eles *= sizes[i];
+    }
+    return num_eles;
+  }
 };
 
 template <typename T>
 void read_tensor(const char *file, const DynamicMemRefType<T> &m) {
-  int64_t num_eles = 1;
-  for (int i = 0; i < m.rank; ++ i) {
-    num_eles *= m.sizes[i];
-  }
+  int64_t num_eles = m.getNumElements();
   FILE *f = fopen(file, "r");
   if (!f) {
     std::cout << "Can't open file " << file << std::endl;
@@ -108,14 +106,12 @@ void print_tensor(const DynamicMemRefType<T> &m) {
  
   // print data
   std::cout << " data = " << std::endl;
-  int64_t num_eles = m.rank > 0 ? 1 : 0;
-  for (int i = 0; i < m.rank; ++ i) {
-    num_eles *= m.sizes[i];
-  }
+  int64_t num_eles = m.getNumElements();
   for (int64_t e = 0; e < num_eles; ++ e)
     std::cout << m.data[e] << " ";
   std::cout << std::endl;
 }
+
 
 extern "C" {
   void _mlir_ciface_print_tensor_i32(UnrankedMemRefType<int32_t> *m);

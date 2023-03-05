@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include "utils.h"
+#include "common.h"
 
 #include "OnnxMlirRuntime.h"
 
@@ -14,7 +15,6 @@ int main(int argc, char **argv) {
   DynamicMemRefType<float> dX(X);
   read_tensor("dummy_in.dat", dX);
 
-  // float *output = read_tensor("dummy_out.dat", shape, 3);
 
   OMTensor *tensor = omTensorCreate(X.data, shape, rank, ONNX_TYPE_FLOAT);
   // Create a tensor list.
@@ -30,6 +30,8 @@ int main(int argc, char **argv) {
   // Extract the output. The model defines one output of type tensor<1x10xf32>.
   OMTensor *y = omTensorListGetOmtByIndex(tensorListOut, 0);
   float *prediction = (float *)omTensorGetDataPtr(y);
+  float *output = read_tensor("dummy_out.dat", shape, 3);
+  check_output(prediction, output, shape, 3);
 
   // Analyze the output.
  //  check_output(prediction, output, shape, rank);
