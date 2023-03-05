@@ -11,14 +11,24 @@ extern "C" OMTensorList *run_main_graph(OMTensorList *);
 int main(int argc, char **argv) {
   int64_t rank = 2;
   int64_t shape[] = {64, 20};
-  StridedMemRefType<int64_t, 2> X(shape);
-  DynamicMemRefType<int64_t> dX(X);
-  read_tensor("dummy_in.dat", dX);
+  StridedMemRefType<int64_t, 2> input_id(shape);
+  DynamicMemRefType<int64_t> diid(input_id);
+  read_tensor("input_ids.dat", diid);
 
-  OMTensor *tensor = omTensorCreate(X.data, shape, rank, ONNX_TYPE_FLOAT);
+  StridedMemRefType<int64_t, 2> token_type_id(shape);
+  DynamicMemRefType<int64_t> dttid(token_type_id);
+  read_tensor("token_type_ids.dat", dttid);
+
+  StridedMemRefType<int64_t, 2> attention_mask(shape);
+  DynamicMemRefType<int64_t> dam(attention_mask);
+  read_tensor("attention_mask.dat", dam);
+
+  OMTensor *A = omTensorCreate(input_id.data, shape, rank, ONNX_TYPE_INT64);
+  OMTensor *B = omTensorCreate(token_type_id.data, shape, rank, ONNX_TYPE_INT64);
+  OMTensor *C = omTensorCreate(attention_mask.data, shape, rank, ONNX_TYPE_INT64);
   // Create a tensor list.
-  OMTensor *inputTensors[1] = {tensor};
-  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, 1);
+  OMTensor *inputTensors[3] = { A, B, C };
+  OMTensorList *tensorListIn = omTensorListCreate(inputTensors, 3);
   
   uint64_t start_ns = getCurNs();
   // Compute outputs.

@@ -83,8 +83,8 @@ void read_tensor(const char *file, const DynamicMemRefType<T> &m) {
     std::cout << "Can't open file " << file << std::endl;
   }
   size_t read = fread(m.data, sizeof(T), num_eles, f);
-  if (read < num_eles)
-    std::cout << "Err when reading file " << file << std::endl;
+  if (read != num_eles)
+    std::cout << "Err reading file " << file << ", expect " << num_eles << ", read " << read << std::endl;
   fclose(f);
 }
 
