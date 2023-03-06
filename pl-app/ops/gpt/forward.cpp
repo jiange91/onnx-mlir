@@ -15,7 +15,7 @@ int main(int argc, char **argv) {
   int64_t shape[] = {64, 1};
   StridedMemRefType<int64_t, 2> input_id(shape);
   DynamicMemRefType<int64_t> diid(input_id);
-  read_tensor("input_id.dat", diid);
+  read_tensor("input_ids.dat", diid);
   inputTensors[0] = omTensorCreate(input_id.data, shape, input_id_rank, ONNX_TYPE_INT64);
   
   // get past_key_values
@@ -38,7 +38,6 @@ int main(int argc, char **argv) {
   }
 
   OMTensorList *tensorListIn = omTensorListCreate(inputTensors, 25);
-  
   uint64_t start_ns = getCurNs();
   // Compute outputs.
   OMTensorList *tensorListOut = run_main_graph(tensorListIn);

@@ -4,3 +4,4 @@ data/*
 *.onnx
 *.o
 *.dat
+**/model_onnx/*

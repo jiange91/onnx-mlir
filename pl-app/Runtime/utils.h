@@ -114,11 +114,17 @@ void print_tensor(const DynamicMemRefType<T> &m) {
 
 
 extern "C" {
+  void _mlir_ciface_print_tensor_i1(UnrankedMemRefType<int8_t> *m);
+  void _mlir_ciface_print_tensor_i8(UnrankedMemRefType<int8_t> *m);
+  void _mlir_ciface_print_tensor_ui8(UnrankedMemRefType<uint8_t> *m);
   void _mlir_ciface_print_tensor_i32(UnrankedMemRefType<int32_t> *m);
   void _mlir_ciface_print_tensor_i64(UnrankedMemRefType<int64_t> *m);
   void _mlir_ciface_print_tensor_f32(UnrankedMemRefType<float> *m);
   void _mlir_ciface_print_tensor_dbl(UnrankedMemRefType<double> *m);
 
+  void _mlir_ciface_read_tensor_i1(const char *file, UnrankedMemRefType<int8_t> *m);
+  void _mlir_ciface_read_tensor_i8(const char *file, UnrankedMemRefType<int8_t> *m);
+  void _mlir_ciface_read_tensor_ui8(const char *file, UnrankedMemRefType<uint8_t> *m);
   void _mlir_ciface_read_tensor_i32(const char *file, UnrankedMemRefType<int32_t> *m);
   void _mlir_ciface_read_tensor_i64(const char *file, UnrankedMemRefType<int64_t> *m);
   void _mlir_ciface_read_tensor_f32(const char *file, UnrankedMemRefType<float> *m);

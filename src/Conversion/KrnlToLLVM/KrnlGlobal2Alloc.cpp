@@ -44,11 +44,17 @@ class EliderAPI final {
   friend class EliderRegistry;
 public:
   enum class ID {
+    READ_I1,
+    READ_I8,
+    READ_UI8,
     READ_I32,
     READ_I64,
     READ_F32,
     READ_DBL,
 
+    ECHO_I1,
+    ECHO_I8,
+    ECHO_UI8,
     ECHO_I32,
     ECHO_I64,
     ECHO_F32,
@@ -69,23 +75,34 @@ public:
   EliderRegistry(mlir::ModuleOp &module): module(module) {
     MLIRContext *context = module.getContext();
     auto voidTy = LLVM::LLVMVoidType::get(context);
+    auto int1Ty = IntegerType::get(context, 1);
     auto int8Ty = IntegerType::get(context, 8);
+    auto uint8Ty = IntegerType::get(context, 8, IntegerType::SignednessSemantics::Unsigned);
     auto int32Ty = IntegerType::get(context, 32);
     auto int64Ty = IntegerType::get(context, 64);
     auto floatTy = FloatType::getF32(context);
     auto dblTy = FloatType::getF64(context);
     auto opaquePtrTy = LLVM::LLVMPointerType::get(int8Ty);
+    auto mI1  = UnrankedMemRefType::get(int1Ty, 0);
+    auto mI8  = UnrankedMemRefType::get(int8Ty, 0);
+    auto mUI8 = UnrankedMemRefType::get(uint8Ty, 0);
     auto mI32 = UnrankedMemRefType::get(int32Ty, 0);
     auto mI64 = UnrankedMemRefType::get(int64Ty, 0);
     auto mf32 = UnrankedMemRefType::get(floatTy, 0);
     auto mdbl = UnrankedMemRefType::get(dblTy, 0);
 
     using ID = EliderAPI::ID;
+    registry.emplace(ID::READ_I1,  EliderAPI(ID::READ_I1,  "read_tensor_i1",  {}, {  opaquePtrTy, mI1  }));
+    registry.emplace(ID::READ_I8,  EliderAPI(ID::READ_I8,  "read_tensor_i8",  {}, {  opaquePtrTy, mI8  }));
+    registry.emplace(ID::READ_UI8, EliderAPI(ID::READ_UI8, "read_tensor_ui8", {}, {  opaquePtrTy, mUI8  }));
     registry.emplace(ID::READ_I32, EliderAPI(ID::READ_I32, "read_tensor_i32", {}, {  opaquePtrTy, mI32 }));
     registry.emplace(ID::READ_I64, EliderAPI(ID::READ_I64, "read_tensor_i64", {}, {  opaquePtrTy, mI64 }));
     registry.emplace(ID::READ_F32, EliderAPI(ID::READ_F32, "read_tensor_f32", {}, {  opaquePtrTy, mf32 }));
     registry.emplace(ID::READ_DBL, EliderAPI(ID::READ_DBL, "read_tensor_dbl", {}, {  opaquePtrTy, mdbl }));
 
+    registry.emplace(ID::ECHO_I1,  EliderAPI(ID::ECHO_I1,  "print_tensor_i1",  {}, { mI1  }));
+    registry.emplace(ID::ECHO_I8,  EliderAPI(ID::ECHO_I8,  "print_tensor_i8",  {}, { mI8  }));
+    registry.emplace(ID::ECHO_UI8, EliderAPI(ID::ECHO_UI8, "print_tensor_ui8", {}, { mUI8 }));
     registry.emplace(ID::ECHO_I32, EliderAPI(ID::ECHO_I32, "print_tensor_i32", {}, { mI32 }));
     registry.emplace(ID::ECHO_I64, EliderAPI(ID::ECHO_I64, "print_tensor_i64", {}, { mI64 }));
     registry.emplace(ID::ECHO_F32, EliderAPI(ID::ECHO_F32, "print_tensor_f32", {}, { mf32 }));
@@ -159,6 +176,7 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &builder, EliderRe
   // create file symbol
   LLVM::GlobalOp fileGlob;
   StringRef sym = krnlGlobalOp.getName();
+  int64_t sizeInBytes = computeSizeInBytes(krnlGlobalOp);
   {
     OpBuilder::InsertionGuard insertGuard(rewriter);
     rewriter.setInsertionPointToStart(module.getBody());
@@ -169,9 +187,8 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &builder, EliderRe
     fileGlob = create.llvm.globalOp(fileNameType, true, LLVM::Linkage::Internal, sym, fileNameAttr);
 
     // write to file
-    llvm::dbgs() << "dumping ... " << sym.str() << "\n";
+    llvm::dbgs() << "dumping ... " << sym.str() << "size (bytes): " << sizeInBytes << "\n";
     ArrayRef<char> rawData;
-    int64_t sizeInBytes = computeSizeInBytes(krnlGlobalOp);
     auto value = krnlGlobalOp.getValue().value();
     if (auto attr = value.dyn_cast<DenseResourceElementsAttr>()) {
       rawData = attr.getRawHandle().getBlob()->getData();
@@ -213,7 +230,20 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &builder, EliderRe
   TypeSwitch<Type>(eleType)
     .Case<IntegerType>([&](IntegerType ty) {
       unsigned b = ty.getWidth();
-      if (b == 32) {
+      if (b == 1) {
+        reg.declareAPI(EliderAPI::ID::READ_I1, rewriter);
+        reg.callAPI(EliderAPI::ID::READ_I1, rewriter, loc, { strAddr, UM });
+      }
+      else if (b == 8) {
+        if (ty.isUnsigned()) {
+          reg.declareAPI(EliderAPI::ID::READ_UI8, rewriter);
+          reg.callAPI(EliderAPI::ID::READ_UI8, rewriter, loc, { strAddr, UM });
+        } else {
+          reg.declareAPI(EliderAPI::ID::READ_I8, rewriter);
+          reg.callAPI(EliderAPI::ID::READ_I8, rewriter, loc, { strAddr, UM });
+        }
+      }
+      else if (b == 32) {
         reg.declareAPI(EliderAPI::ID::READ_I32, rewriter);
         reg.callAPI(EliderAPI::ID::READ_I32, rewriter, loc, { strAddr, UM });
       } 
@@ -222,7 +252,8 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &builder, EliderRe
       	reg.callAPI(EliderAPI::ID::READ_I64, rewriter, loc, { strAddr, UM });
       }
       else {
-        ty.dump();
+        krnlGlobalOp.dump();
+        llvm::dbgs() << "Total size: " << sizeInBytes << "\n";
         llvm_unreachable("Unsupported 2alloc type");
       }
     })
