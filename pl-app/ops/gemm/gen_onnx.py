@@ -11,7 +11,7 @@ Y = helper.make_tensor_value_info('Y', TensorProto.FLOAT, [64512, 512])
 
 # Create a node (NodeProto) - This is based on Pad-11
 node_def = helper.make_node(
-  'MatMul', # node name
+  'Gemm', # node name
   ['X1', 'X2'], # inputs
   ['Y'], # outputs
 )
