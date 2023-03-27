@@ -7,11 +7,11 @@ X1 = helper.make_tensor_value_info('X1', TensorProto.FLOAT, [64512, 512])
 X2 = helper.make_tensor_value_info('X2', TensorProto.FLOAT, [512, 512])
 
 # Create one output (ValueInfoProto)
-Y = helper.make_tensor_value_info('Y', TensorProto.FLOAT, [10000, 128])
+Y = helper.make_tensor_value_info('Y', TensorProto.FLOAT, [64512, 512])
 
 # Create a node (NodeProto) - This is based on Pad-11
 node_def = helper.make_node(
-  'Gemm', # node name
+  'MatMul', # node name
   ['X1', 'X2'], # inputs
   ['Y'], # outputs
 )

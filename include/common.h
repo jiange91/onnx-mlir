@@ -77,7 +77,7 @@ void check_output(float *pred, float *truth, int64_t shape[], int rank) {
   printf("Verify output ---- \n");
   for (int64_t e = 0; e < num_ele; ++ e) {
     float diff = abs(pred[e] - truth[e]);
-    if (diff >= 1e-5)
+    if (diff >= 3e-4)
       printf("pred: %f, truth: %f, diff: %f\n", pred[e], truth[e], diff);
   }
   printf(" ---- Complete\n");

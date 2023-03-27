@@ -19,10 +19,12 @@ cd llvm-project && git checkout ba8b8a73fcb6b830e63cd8e20c6e13b2a14d69bf && cd .
 
 [same-as-file]: <> (utils/build-mlir.sh)
 ``` bash
-mkdir llvm-project/build
-cd llvm-project/build
-cmake -G Ninja ../llvm \
+mkdir llvm-build
+cd llvm-build
+cmake -G Ninja ../../llvm-project/llvm \
    -DLLVM_ENABLE_PROJECTS=mlir \
+   -DCMAKE_C_COMPILER=gcc-9 \
+   -DCMAKE_CXX_COMPILER=g++-9 \
    -DLLVM_TARGETS_TO_BUILD="host" \
    -DCMAKE_BUILD_TYPE=Release \
    -DLLVM_ENABLE_ASSERTIONS=ON \
