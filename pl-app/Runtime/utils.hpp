@@ -6,7 +6,6 @@
 #include <cassert>
 #include <initializer_list>
 #include <iostream>
-#include <time.h>
 
 template <typename T, int N>
 struct StridedMemRefType {
@@ -16,6 +15,8 @@ public:
   int64_t offset;
   int64_t sizes[N];
   int64_t strides[N];
+
+  StridedMemRefType() = default;
 
   StridedMemRefType(int64_t shape[N]) {
     offset = 0;
@@ -89,7 +90,7 @@ void read_tensor(const char *file, const DynamicMemRefType<T> &m) {
 }
 
 template <typename T>
-void print_tensor(const DynamicMemRefType<T> &m) {
+void print_tensor(const DynamicMemRefType<T> &m, bool printData = false) {
   // print meta
   auto print = [&](const int64_t *ptr) {
     if (m.rank == 0)
@@ -105,13 +106,14 @@ void print_tensor(const DynamicMemRefType<T> &m) {
   std::cout << "]" << std::endl;
  
   // print data
-  std::cout << " data = " << std::endl;
-  int64_t num_eles = m.getNumElements();
-  for (int64_t e = 0; e < num_eles; ++ e)
-    std::cout << m.data[e] << " ";
-  std::cout << std::endl;
+  if (printData) {
+    std::cout << " data = " << std::endl;
+    int64_t num_eles = m.getNumElements();
+    for (int64_t e = 0; e < num_eles; ++ e)
+      std::cout << m.data[e] << " ";
+    std::cout << std::endl;
+  }
 }
-
 
 extern "C" {
   void _mlir_ciface_print_tensor_i1(UnrankedMemRefType<int8_t> *m);

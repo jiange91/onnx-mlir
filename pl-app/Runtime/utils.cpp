@@ -1,4 +1,4 @@
-#include "utils.h"
+#include "utils.hpp"
 
 extern "C" {
   void _mlir_ciface_print_tensor_i1(UnrankedMemRefType<int8_t> *m) {

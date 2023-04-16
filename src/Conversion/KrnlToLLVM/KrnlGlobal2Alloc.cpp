@@ -119,6 +119,7 @@ public:
       StringAttr vis = StringAttr::get(builder.getContext(), "private");
       auto funcOp = builder.create<func::FuncOp>(module.getLoc(), api.name, funcType);
       funcOp.setSymVisibilityAttr(vis);
+      funcOp->setAttr("llvm.emit_c_interface", builder.getUnitAttr());
     }
   }
 
@@ -157,6 +158,22 @@ static int64_t computeSizeInBytes(KrnlGlobalOp &krnlGlobalOp) {
   const auto type = krnlGlobalOp.getResult().getType();
   const auto memRefTy = type.cast<mlir::MemRefType>();
   return numElements * getMemRefEltSizeInBytes(memRefTy);
+}
+
+static func::FuncOp getOrCreateReadModel(ModuleOp module) {
+  StringRef funcName = "read_model";
+  auto funcOp = module.lookupSymbol<func::FuncOp>(funcName);
+  if (!funcOp) {
+    OpBuilder builder(module);
+    builder.setInsertionPointToStart(module.getBody());
+    auto funcType = builder.getFunctionType({}, {});
+        // mlir::FunctionType::get(builder.getContext(), api.inputTypes, {api.outputTy});
+    StringAttr vis = StringAttr::get(builder.getContext(), "external");
+    funcOp = builder.create<func::FuncOp>(module.getLoc(), funcName, funcType);
+    funcOp.setSymVisibilityAttr(vis);
+    funcOp.addEntryBlock();
+  }
+  return funcOp;
 }
 
 static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &builder, EliderRegistry &reg) {
@@ -216,7 +233,30 @@ static void allocAndRead(KrnlGlobalOp krnlGlobalOp, OpBuilder &builder, EliderRe
   }
   auto alloc = create.mem.alignedAlloc(memRefTy);
 
-  // insert func and read call
+#if 0
+  // globalize tensor
+  memref::GlobalOp global;
+  {
+    Location loc = krnlGlobalOp.getLoc();
+    OpBuilder::InsertionGuard insertGuard(rewriter);
+    rewriter.setInsertionPointToStart(module.getBody());
+
+    global = rewriter.create<memref::GlobalOp>(
+      loc,
+      krnlGlobalOp.getNameAttr(),
+      rewriter.getStringAttr("private"),
+      mlir::TypeAttr::get(memRefTy),
+      krnlGlobalOp.getValueAttr(),
+      rewriter.getUnitAttr(),
+      krnlGlobalOp.getAlignmentAttr()
+    );
+  }
+#endif
+
+  // insert read call
+  // func::FuncOp readModel = getOrCreateReadModel(module);
+  // rewriter.setInsertionPointToEnd(&readModel.getFunctionBody().back());
+
   Type eleType = memRefTy.getElementType();
   Value UM = rewriter.create<memref::CastOp>(loc, UnrankedMemRefType::get(eleType, 0), alloc.getMemref()).getDest();
 

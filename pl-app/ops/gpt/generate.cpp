@@ -1,6 +1,6 @@
 #include <iostream>
 #include <vector>
-#include "utils.h"
+#include "utils.hpp"
 #include "common.h"
 #include "OnnxMlirRuntime.h"
 #include <string>

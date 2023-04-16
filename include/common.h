@@ -84,7 +84,7 @@ void check_output(float *pred, float *truth, int64_t shape[], int rank) {
 }
 
 #define FMB (256L << 10)
-float volatile flush_dummy = 1;
+float flush_dummy = 1;
 
 void flush_local(int64_t msize) {
   if (msize <= 0) {
@@ -92,7 +92,7 @@ void flush_local(int64_t msize) {
     return;
   }
   int64_t shape[3] = { 256, 1024, msize };
-  float *buf = dummy_tensor(shape, 3);
+  volatile float *buf = dummy_tensor(shape, 3);
   size_t num_ele = 1;
   for (int i = 0; i < 3; ++ i)
     num_ele *= shape[i];
